@@ -120,6 +120,7 @@ export interface Assignment {
   priority: Priority;
   status: Status;
   notes: string | null;
+  archived: boolean; // moved to the Archived screen (excluded from active views)
   lastUpdated: string | null;
   createdAt: string;
   updatedAt: string;

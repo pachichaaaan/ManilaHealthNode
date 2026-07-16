@@ -12,6 +12,7 @@ import { HoursBars } from "@/components/hours-bars";
 import { EndingSoon } from "@/components/ending-soon";
 import { PlusOneCard } from "@/components/plus-one-card";
 import { TiltCard } from "@/components/tilt-card";
+import { InterestedRolesBox } from "@/components/interested-roles-box";
 import { Avatar } from "@/components/avatar";
 import { formatHours } from "@/lib/utils";
 
@@ -55,53 +56,24 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      {/* KPIs (3D tilt) */}
+      {/* KPIs (3D tilt) — each tile links to the relevant screen */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <TiltCard><StatCard label="Active" value={a.activeCount} tone="emerald" icon={<Activity size={16} />} hint={`${a.total} total`} delay={0} /></TiltCard>
-        <TiltCard><StatCard label="Plus 1" value={a.plusOneCount} tone="gold" icon={<Star size={16} />} hint={`${a.bdCount} BD · ${a.projectCount} project`} delay={70} /></TiltCard>
-        <TiltCard><StatCard label="Hours logged" value={a.actualHours} kind="hours" tone="sky" icon={<Clock size={16} />} hint={`of ${formatHours(a.estimatedHours)} planned`} delay={140} /></TiltCard>
-        <TiltCard><StatCard label="WBS to action" value={a.wbsActionCount} tone="rose" icon={<AlertTriangle size={16} />} hint="Codes not provided" delay={210} /></TiltCard>
+        <Link href="/assignments?status=active" className="block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-bg">
+          <TiltCard><StatCard label="Active" value={a.activeCount} tone="emerald" icon={<Activity size={16} />} hint={`${a.total} total`} delay={0} /></TiltCard>
+        </Link>
+        <Link href="/plus-one" className="block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-bg">
+          <TiltCard><StatCard label="Plus 1" value={a.plusOneCount} tone="gold" icon={<Star size={16} />} hint={`${a.bdCount} BD · ${a.projectCount} project`} delay={70} /></TiltCard>
+        </Link>
+        <Link href="/assignments" className="block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-bg">
+          <TiltCard><StatCard label="Hours logged" value={a.actualHours} kind="hours" tone="sky" icon={<Clock size={16} />} hint={`of ${formatHours(a.estimatedHours)} planned`} delay={140} /></TiltCard>
+        </Link>
+        <Link href="/wbs" className="block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-bg">
+          <TiltCard><StatCard label="WBS to action" value={a.wbsActionCount} tone="rose" icon={<AlertTriangle size={16} />} hint="Codes not provided" delay={210} /></TiltCard>
+        </Link>
       </div>
 
-      {/* interested open roles */}
-      {interestedRoles.length > 0 && (
-        <Card className="animate-fade-up" style={{ animationDelay: "240ms" }}>
-          <CardTitle
-            title="Roles you're interested in"
-            subtitle={`${interestedRoles.length} starred open role${interestedRoles.length === 1 ? "" : "s"}`}
-            action={
-              <Link href="/open-roles" className="inline-flex items-center gap-1 text-sm font-medium text-gold-text hover:underline">
-                Open Roles <ArrowUpRight size={15} />
-              </Link>
-            }
-          />
-          <ul className="flex flex-col divide-y divide-border">
-            {interestedRoles.map((r) => (
-              <li key={r.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
-                <Star size={15} className="shrink-0 fill-[var(--gold)] text-gold" />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-ink">{r.title}</div>
-                  <div className="truncate text-xs text-ink-faint">
-                    {r.client ?? "—"}
-                    {r.marketUnit ? ` · ${r.marketUnit}` : ""}
-                  </div>
-                </div>
-                {r.status && (
-                  <span
-                    className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium"
-                    style={{
-                      background: `color-mix(in srgb, var(--stage-${roleStatusTone(r.status)}) 15%, transparent)`,
-                      color: `var(--stage-${roleStatusTone(r.status)}-fg)`,
-                    }}
-                  >
-                    {r.status.replace(/^Open - /, "")}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
+      {/* interested open roles — clickable rows + remove */}
+      <InterestedRolesBox roles={interestedRoles} />
 
       {/* team interest (lead only) */}
       {isLead && teamInterests.length > 0 && (
@@ -117,35 +89,40 @@ export default async function DashboardPage() {
           />
           <ul className="flex flex-col divide-y divide-border">
             {teamInterests.map((t) => (
-              <li key={t.roleId} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
-                <div className="flex -space-x-2">
-                  {t.users.slice(0, 5).map((u) => (
-                    <Avatar key={u.id} name={u.name} accent={u.accent} size={28} className="ring-2 ring-surface" />
-                  ))}
-                  {t.users.length > 5 && (
-                    <span className="grid h-7 w-7 place-items-center rounded-full bg-surface-2 text-[10px] font-semibold text-ink-soft ring-2 ring-surface">
-                      +{t.users.length - 5}
+              <li key={t.roleId} className="first:pt-0 last:pb-0">
+                <Link
+                  href={`/open-roles?role=${t.roleId}`}
+                  className="group -mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-surface-2/50"
+                >
+                  <div className="flex -space-x-2">
+                    {t.users.slice(0, 5).map((u) => (
+                      <Avatar key={u.id} name={u.name} accent={u.accent} size={28} className="ring-2 ring-surface" />
+                    ))}
+                    {t.users.length > 5 && (
+                      <span className="grid h-7 w-7 place-items-center rounded-full bg-surface-2 text-[10px] font-semibold text-ink-soft ring-2 ring-surface">
+                        +{t.users.length - 5}
+                      </span>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-ink transition-colors group-hover:text-gold-text">{t.title}</div>
+                    <div className="truncate text-xs text-ink-faint">
+                      {t.users.map((u) => u.name).join(", ")}
+                      {t.client ? ` · ${t.client}` : ""}
+                    </div>
+                  </div>
+                  {t.status && (
+                    <span
+                      className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium"
+                      style={{
+                        background: `color-mix(in srgb, var(--stage-${roleStatusTone(t.status)}) 15%, transparent)`,
+                        color: `var(--stage-${roleStatusTone(t.status)}-fg)`,
+                      }}
+                    >
+                      {t.status.replace(/^Open - /, "")}
                     </span>
                   )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-ink">{t.title}</div>
-                  <div className="truncate text-xs text-ink-faint">
-                    {t.users.map((u) => u.name).join(", ")}
-                    {t.client ? ` · ${t.client}` : ""}
-                  </div>
-                </div>
-                {t.status && (
-                  <span
-                    className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium"
-                    style={{
-                      background: `color-mix(in srgb, var(--stage-${roleStatusTone(t.status)}) 15%, transparent)`,
-                      color: `var(--stage-${roleStatusTone(t.status)}-fg)`,
-                    }}
-                  >
-                    {t.status.replace(/^Open - /, "")}
-                  </span>
-                )}
+                </Link>
               </li>
             ))}
           </ul>
@@ -209,17 +186,21 @@ export default async function DashboardPage() {
           <CardTitle title="By member" subtitle="Each person's load at a glance" action={<Link href="/team" className="inline-flex items-center gap-1 text-sm font-medium text-gold-text hover:underline">Manage <ArrowUpRight size={15} /></Link>} />
           <div className="grid gap-3 sm:grid-cols-2">
             {a.members.map((m) => (
-              <div key={m.ownerId} className="flex items-center gap-3 rounded-xl border border-border bg-surface-2/40 px-3 py-2.5">
+              <Link
+                key={m.ownerId}
+                href={`/assignments?member=${m.ownerId}`}
+                className="group flex items-center gap-3 rounded-xl border border-border bg-surface-2/40 px-3 py-2.5 transition-colors hover:border-border-strong hover:bg-surface-2/70"
+              >
                 <Avatar name={m.member} accent={m.accent} size={38} />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-ink">{m.member}</div>
+                  <div className="truncate text-sm font-medium text-ink transition-colors group-hover:text-gold-text">{m.member}</div>
                   <div className="text-[11px] text-ink-faint">{m.active} active · {m.plusOne} Plus 1 · {m.wbsAction ? `${m.wbsAction} WBS` : "WBS clear"}</div>
                 </div>
                 <div className="text-right">
                   <div className="tnum text-sm font-semibold text-ink">{formatHours(m.actualHours)}</div>
                   <div className="text-[11px] text-ink-faint">of {formatHours(m.estimatedHours)}</div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </Card>
@@ -237,7 +218,13 @@ export default async function DashboardPage() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {a.plusOnes.slice(0, 6).map((p, i) => (
-              <PlusOneCard key={p.id} a={p} delay={i * 60} showOwner={isLead} />
+              <Link
+                key={p.id}
+                href={`/assignments?open=${p.id}`}
+                className="block rounded-2xl transition-transform hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+              >
+                <PlusOneCard a={p} delay={i * 60} showOwner={isLead} />
+              </Link>
             ))}
           </div>
         </div>

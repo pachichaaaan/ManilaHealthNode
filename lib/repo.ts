@@ -152,18 +152,33 @@ function toAssignment(r: Row): Assignment {
     priority: String(r.priority) as Priority,
     status: String(r.status) as Status,
     notes: s(r.notes),
+    archived: Number(r.archived) === 1,
     lastUpdated: s(r.last_updated),
     createdAt: String(r.created_at),
     updatedAt: String(r.updated_at),
   };
 }
 
-/** List assignments; pass an ownerId to scope to one member (used for members). */
-export async function listAssignments(ownerId?: string): Promise<Assignment[]> {
+/**
+ * List assignments. Pass an ownerId to scope to one member (used for members).
+ * By default only *active* (non-archived) rows are returned; pass
+ * `{ archived: true }` for the Archived screen.
+ */
+export async function listAssignments(
+  ownerId?: string,
+  opts: { archived?: boolean } = {},
+): Promise<Assignment[]> {
   await ensureSchema();
-  const res = ownerId
-    ? await getDb().execute({ sql: `${SELECT} WHERE a.owner_id = ? ORDER BY a.seq ASC`, args: [ownerId] })
-    : await getDb().execute(`${SELECT} ORDER BY a.seq ASC`);
+  const conds = ["a.archived = ?"];
+  const args: (string | number)[] = [opts.archived ? 1 : 0];
+  if (ownerId) {
+    conds.push("a.owner_id = ?");
+    args.push(ownerId);
+  }
+  const res = await getDb().execute({
+    sql: `${SELECT} WHERE ${conds.join(" AND ")} ORDER BY a.seq ASC`,
+    args,
+  });
   return res.rows.map(toAssignment);
 }
 
@@ -276,6 +291,15 @@ export async function deleteAssignment(id: string): Promise<void> {
   await getDb().execute({ sql: "DELETE FROM assignments WHERE id = ?", args: [id] });
 }
 
+/** Move an assignment to (or out of) the Archived screen. */
+export async function setAssignmentArchived(id: string, archived: boolean): Promise<void> {
+  await ensureSchema();
+  await getDb().execute({
+    sql: "UPDATE assignments SET archived = ?, updated_at = ? WHERE id = ?",
+    args: [archived ? 1 : 0, new Date().toISOString(), id],
+  });
+}
+
 /** Wipe everything (used by seed and by leader re-import). */
 export async function clearAll(): Promise<void> {
   await ensureSchema();
@@ -359,6 +383,12 @@ export async function insertRoles(rows: OpenRoleFields[]): Promise<number> {
 export async function clearRoles(): Promise<void> {
   await ensureSchema();
   await getDb().executeMultiple("DELETE FROM role_interests; DELETE FROM roles;");
+}
+
+export async function deleteRole(id: string): Promise<void> {
+  await ensureSchema();
+  await getDb().execute({ sql: "DELETE FROM role_interests WHERE role_id = ?", args: [id] });
+  await getDb().execute({ sql: "DELETE FROM roles WHERE id = ?", args: [id] });
 }
 
 export async function listInterestedRoleIds(userId: string): Promise<string[]> {

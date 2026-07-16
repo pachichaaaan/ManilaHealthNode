@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ClipboardList, Loader2, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
+import { Archive, ClipboardList, Loader2, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
 import { AssignmentDialog, type OwnerOption } from "./assignment-dialog";
 import { Avatar } from "./avatar";
 import { ClassificationBadge, StatusBadge, WbsBadge } from "./badges";
@@ -30,22 +30,32 @@ export function AssignmentsView({
   role,
   currentUserId,
   owners,
+  initialOwnerId,
+  initialOpenId,
+  initialStatus,
 }: {
   assignments: Assignment[];
   role: Role;
   currentUserId: string;
   owners: OwnerOption[];
+  initialOwnerId?: string;
+  initialOpenId?: string;
+  initialStatus?: Status;
 }) {
   const router = useRouter();
   const isLead = role === "lead";
   const [pending, startTransition] = useTransition();
   const [search, setSearch] = useState("");
   const [classFilter, setClassFilter] = useState<ClassFilter>("all");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [ownerFilter, setOwnerFilter] = useState<string>("all");
-  const [dialog, setDialog] = useState<{ open: boolean; assignment: Assignment | null }>({ open: false, assignment: null });
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialStatus ?? "all");
+  const [ownerFilter, setOwnerFilter] = useState<string>(initialOwnerId ?? "all");
+  const [dialog, setDialog] = useState<{ open: boolean; assignment: Assignment | null }>(() => {
+    const a = initialOpenId ? assignments.find((x) => x.id === initialOpenId) ?? null : null;
+    return a ? { open: true, assignment: a } : { open: false, assignment: null };
+  });
   const [toast, setToast] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [archivingId, setArchivingId] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -90,6 +100,21 @@ export function AssignmentsView({
       startTransition(() => router.refresh());
     } else {
       showToast("Could not delete assignment");
+    }
+  }
+  async function onArchive(a: Assignment) {
+    setArchivingId(a.id);
+    const res = await fetch(`/api/assignments/${a.id}/archive`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ archived: true }),
+    });
+    setArchivingId(null);
+    if (res.ok) {
+      showToast("Moved to Archived");
+      startTransition(() => router.refresh());
+    } else {
+      showToast("Could not archive assignment");
     }
   }
   async function onImportFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -235,6 +260,9 @@ export function AssignmentsView({
                   <button type="button" onClick={() => setDialog({ open: true, assignment: a })} aria-label={`Edit ${a.client}`} className="grid h-7 w-7 cursor-pointer place-items-center rounded-md text-ink-faint transition-colors hover:bg-surface-2 hover:text-ink">
                     <Pencil size={14} />
                   </button>
+                  <button type="button" onClick={() => onArchive(a)} disabled={archivingId === a.id} aria-label={`Archive ${a.client}`} title="Move to Archived" className="grid h-7 w-7 cursor-pointer place-items-center rounded-md text-ink-faint transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50">
+                    {archivingId === a.id ? <Loader2 size={14} className="animate-spin" /> : <Archive size={14} />}
+                  </button>
                   <button type="button" onClick={() => onDelete(a)} disabled={deletingId === a.id} aria-label={`Delete ${a.client}`} className="grid h-7 w-7 cursor-pointer place-items-center rounded-md text-ink-faint transition-colors hover:bg-[color-mix(in_srgb,var(--stage-rose)_14%,transparent)] hover:text-stage-rose disabled:opacity-50">
                     {deletingId === a.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                   </button>
@@ -253,6 +281,8 @@ export function AssignmentsView({
           assignment={dialog.assignment}
           onClose={() => setDialog({ open: false, assignment: null })}
           onSaved={onSaved}
+          onDeleted={onSaved}
+          onArchivedChange={onSaved}
         />
       )}
 

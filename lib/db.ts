@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS assignments (
   priority TEXT NOT NULL DEFAULT 'medium',
   status TEXT NOT NULL DEFAULT 'active',
   notes TEXT,
+  archived INTEGER NOT NULL DEFAULT 0,
   last_updated TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -103,12 +104,38 @@ CREATE TABLE IF NOT EXISTS role_interests (
 CREATE INDEX IF NOT EXISTS idx_interests_user ON role_interests(user_id);
 `;
 
+/**
+ * Additive migrations for pre-existing DBs, applied in order AFTER the base
+ * schema. The ALTER must run before any index that references the new column;
+ * both statements are idempotent (duplicate-column / IF NOT EXISTS), so a
+ * re-run just no-ops.
+ */
+const MIGRATIONS = [
+  "ALTER TABLE assignments ADD COLUMN archived INTEGER NOT NULL DEFAULT 0",
+  "CREATE INDEX IF NOT EXISTS idx_assignments_archived ON assignments(archived)",
+];
+
 /** Idempotently ensure the schema exists. Memoised for the process lifetime. */
 export function ensureSchema(): Promise<void> {
   if (!globalThis.__keystoneMigrated) {
-    globalThis.__keystoneMigrated = getDb()
-      .executeMultiple(SCHEMA)
-      .then(() => undefined);
+    globalThis.__keystoneMigrated = (async () => {
+      const db = getDb();
+      await db.executeMultiple(SCHEMA);
+      // CREATE TABLE IF NOT EXISTS won't add columns to an existing table, so
+      // apply additive migrations here. A duplicate-column error just means the
+      // migration already ran — safe to ignore.
+      for (const sql of MIGRATIONS) {
+        try {
+          await db.execute(sql);
+        } catch {
+          /* already applied */
+        }
+      }
+    })().catch((err) => {
+      // Don't cache a failed run — allow the next request to retry.
+      globalThis.__keystoneMigrated = undefined;
+      throw err;
+    });
   }
   return globalThis.__keystoneMigrated;
 }

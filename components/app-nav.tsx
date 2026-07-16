@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardList, Compass, FileCheck2, LayoutDashboard, Star, Users, type LucideIcon } from "lucide-react";
+import { Archive, ClipboardList, Compass, FileCheck2, LayoutDashboard, Star, Users, type LucideIcon } from "lucide-react";
 import { Logo } from "./logo";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/lib/types";
@@ -15,6 +15,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/open-roles", label: "Open Roles", icon: Compass },
   { href: "/plus-one", label: "Plus 1", icon: Star },
   { href: "/wbs", label: "WBS", icon: FileCheck2 },
+  { href: "/archived", label: "Archived", icon: Archive },
   { href: "/team", label: "Team", icon: Users, leadOnly: true },
 ];
 

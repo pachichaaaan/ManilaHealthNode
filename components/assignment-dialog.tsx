@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Loader2, X } from "lucide-react";
+import { Archive, ArchiveRestore, Loader2, Trash2, X } from "lucide-react";
 import {
   CLASSIFICATIONS,
   CLASSIFICATION_META,
@@ -47,6 +47,8 @@ export function AssignmentDialog({
   assignment,
   onClose,
   onSaved,
+  onDeleted,
+  onArchivedChange,
 }: {
   owners: OwnerOption[];
   canAssign: boolean; // leads may choose the owner
@@ -54,6 +56,8 @@ export function AssignmentDialog({
   assignment: Assignment | null;
   onClose: () => void;
   onSaved: (message: string) => void;
+  onDeleted?: (message: string) => void;
+  onArchivedChange?: (message: string) => void;
 }) {
   const isEdit = Boolean(assignment);
   const [ownerId, setOwnerId] = useState(assignment?.ownerId ?? defaultOwnerId ?? owners[0]?.id ?? "");
@@ -77,6 +81,9 @@ export function AssignmentDialog({
   const [notes, setNotes] = useState(assignment?.notes ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const isArchived = Boolean(assignment?.archived);
   const firstRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -147,6 +154,50 @@ export function AssignmentDialog({
     } catch {
       setError("Network error. Please try again.");
       setSaving(false);
+    }
+  }
+
+  async function remove() {
+    if (!assignment || !onDeleted) return;
+    if (!window.confirm(`Delete "${assignment.client}"? This can't be undone.`)) return;
+    setError(null);
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/assignments/${assignment.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error ?? "Could not delete the assignment.");
+        setDeleting(false);
+        return;
+      }
+      onDeleted("Assignment deleted");
+    } catch {
+      setError("Network error. Please try again.");
+      setDeleting(false);
+    }
+  }
+
+  async function toggleArchive() {
+    if (!assignment || !onArchivedChange) return;
+    const next = !isArchived;
+    setError(null);
+    setArchiving(true);
+    try {
+      const res = await fetch(`/api/assignments/${assignment.id}/archive`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archived: next }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error ?? "Could not update the assignment.");
+        setArchiving(false);
+        return;
+      }
+      onArchivedChange(next ? "Moved to Archived" : "Restored to active");
+    } catch {
+      setError("Network error. Please try again.");
+      setArchiving(false);
     }
   }
 
@@ -292,14 +343,46 @@ export function AssignmentDialog({
             </p>
           )}
 
-          <div className="mt-1 flex items-center justify-end gap-2">
-            <button type="button" onClick={onClose} className="cursor-pointer rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink-soft transition-colors hover:text-ink">
-              Cancel
-            </button>
-            <button type="submit" disabled={saving} className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-surface transition-transform hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-60">
-              {saving && <Loader2 size={15} className="animate-spin" />}
-              {isEdit ? "Save changes" : "Add assignment"}
-            </button>
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              {isEdit && onArchivedChange && (
+                <button
+                  type="button"
+                  onClick={toggleArchive}
+                  disabled={archiving || saving || deleting}
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink-soft transition-colors hover:border-border-strong hover:text-ink disabled:opacity-60"
+                >
+                  {archiving ? (
+                    <Loader2 size={15} className="animate-spin" />
+                  ) : isArchived ? (
+                    <ArchiveRestore size={15} />
+                  ) : (
+                    <Archive size={15} />
+                  )}
+                  {isArchived ? "Restore" : "Archive"}
+                </button>
+              )}
+              {isEdit && onDeleted && (
+                <button
+                  type="button"
+                  onClick={remove}
+                  disabled={deleting || saving || archiving}
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink-soft transition-colors hover:border-stage-rose hover:text-stage-rose disabled:opacity-60"
+                >
+                  {deleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                  Delete
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={onClose} className="cursor-pointer rounded-lg border border-border px-4 py-2 text-sm font-medium text-ink-soft transition-colors hover:text-ink">
+                Cancel
+              </button>
+              <button type="submit" disabled={saving || deleting || archiving} className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-surface transition-transform hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-60">
+                {saving && <Loader2 size={15} className="animate-spin" />}
+                {isEdit ? "Save changes" : "Add assignment"}
+              </button>
+            </div>
           </div>
         </form>
       </div>

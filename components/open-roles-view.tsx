@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { ExternalLink, Loader2, MapPin, Search, SlidersHorizontal, Star, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ExternalLink, Loader2, MapPin, Search, SlidersHorizontal, Star, Trash2, X } from "lucide-react";
 import { priorityTone, roleStatusTone, type OpenRole, type Tone } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -45,7 +46,18 @@ const FILTER_LABELS: Record<FilterKey, string> = {
   locationType: "Location",
 };
 
-export function OpenRolesView({ roles, interestedIds }: { roles: OpenRole[]; interestedIds: string[] }) {
+export function OpenRolesView({
+  roles,
+  interestedIds,
+  canManage = false,
+  initialRoleId,
+}: {
+  roles: OpenRole[];
+  interestedIds: string[];
+  canManage?: boolean;
+  initialRoleId?: string;
+}) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<FilterKey, string>>({
     marketUnit: "all",
@@ -58,7 +70,10 @@ export function OpenRolesView({ roles, interestedIds }: { roles: OpenRole[]; int
   const [visible, setVisible] = useState(24);
   const [interested, setInterested] = useState<Set<string>>(new Set(interestedIds));
   const [busy, setBusy] = useState<string | null>(null);
-  const [detail, setDetail] = useState<OpenRole | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [detail, setDetail] = useState<OpenRole | null>(() =>
+    initialRoleId ? roles.find((r) => r.id === initialRoleId) ?? null : null,
+  );
   const [toast, setToast] = useState<string | null>(null);
 
   const options = useMemo(
@@ -140,6 +155,22 @@ export function OpenRolesView({ roles, interestedIds }: { roles: OpenRole[]; int
       showToast("Could not update");
     } finally {
       setBusy(null);
+    }
+  }
+
+  async function remove(role: OpenRole) {
+    if (!window.confirm(`Delete "${role.title}" from Open Roles?\n\nThis removes it for everyone, including anyone who starred it.`)) return;
+    setDeleting(role.id);
+    try {
+      const res = await fetch(`/api/roles/${role.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      setDetail((d) => (d?.id === role.id ? null : d));
+      showToast("Role deleted");
+      router.refresh();
+    } catch {
+      showToast("Could not delete role");
+    } finally {
+      setDeleting(null);
     }
   }
 
@@ -225,21 +256,35 @@ export function OpenRolesView({ roles, interestedIds }: { roles: OpenRole[]; int
               const isInt = interested.has(r.id);
               return (
                 <div key={r.id} className="group relative flex flex-col rounded-2xl border border-border bg-surface p-4 shadow-[var(--shadow-sm)] transition-shadow hover:shadow-[var(--shadow-md)]">
-                  <button
-                    type="button"
-                    onClick={() => toggle(r)}
-                    disabled={busy === r.id}
-                    aria-pressed={isInt}
-                    aria-label={isInt ? "Remove from interested" : "Mark interested"}
-                    className="absolute right-3 top-3 grid h-8 w-8 cursor-pointer place-items-center rounded-lg border border-border bg-surface transition-colors hover:border-gold disabled:opacity-50"
-                  >
-                    {busy === r.id ? (
-                      <Loader2 size={15} className="animate-spin text-ink-faint" />
-                    ) : (
-                      <Star size={15} className={isInt ? "fill-[var(--gold)] text-gold" : "text-ink-faint"} />
+                  <div className="absolute right-3 top-3 flex items-center gap-1.5">
+                    {canManage && (
+                      <button
+                        type="button"
+                        onClick={() => remove(r)}
+                        disabled={deleting === r.id}
+                        aria-label={`Delete ${r.title}`}
+                        title="Delete role"
+                        className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg border border-border bg-surface text-ink-faint transition-colors hover:border-stage-rose hover:text-stage-rose disabled:opacity-50"
+                      >
+                        {deleting === r.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                      </button>
                     )}
-                  </button>
-                  <button type="button" onClick={() => setDetail(r)} className="cursor-pointer pr-9 text-left">
+                    <button
+                      type="button"
+                      onClick={() => toggle(r)}
+                      disabled={busy === r.id}
+                      aria-pressed={isInt}
+                      aria-label={isInt ? "Remove from interested" : "Mark interested"}
+                      className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg border border-border bg-surface transition-colors hover:border-gold disabled:opacity-50"
+                    >
+                      {busy === r.id ? (
+                        <Loader2 size={15} className="animate-spin text-ink-faint" />
+                      ) : (
+                        <Star size={15} className={isInt ? "fill-[var(--gold)] text-gold" : "text-ink-faint"} />
+                      )}
+                    </button>
+                  </div>
+                  <button type="button" onClick={() => setDetail(r)} className={cn("cursor-pointer text-left", canManage ? "pr-[4.75rem]" : "pr-9")}>
                     <div className="font-display text-[15px] font-semibold leading-snug text-ink">{r.title}</div>
                     <div className="mt-0.5 truncate text-sm text-ink-soft">
                       {r.client ?? "—"}
@@ -276,7 +321,16 @@ export function OpenRolesView({ roles, interestedIds }: { roles: OpenRole[]; int
       )}
 
       {detail && (
-        <RoleDetail role={detail} interested={interested.has(detail.id)} busy={busy === detail.id} onToggle={() => toggle(detail)} onClose={() => setDetail(null)} />
+        <RoleDetail
+          role={detail}
+          interested={interested.has(detail.id)}
+          busy={busy === detail.id}
+          canDelete={canManage}
+          deleting={deleting === detail.id}
+          onDelete={() => remove(detail)}
+          onToggle={() => toggle(detail)}
+          onClose={() => setDetail(null)}
+        />
       )}
 
       {toast && (
@@ -302,12 +356,18 @@ function RoleDetail({
   role,
   interested,
   busy,
+  canDelete,
+  deleting,
+  onDelete,
   onToggle,
   onClose,
 }: {
   role: OpenRole;
   interested: boolean;
   busy: boolean;
+  canDelete: boolean;
+  deleting: boolean;
+  onDelete: () => void;
   onToggle: () => void;
   onClose: () => void;
 }) {
@@ -368,13 +428,26 @@ function RoleDetail({
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t border-border px-5 py-4">
-          {role.editLink ? (
-            <a href={role.editLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium text-gold-text hover:underline">
-              Open in MySched <ExternalLink size={14} />
-            </a>
-          ) : (
-            <span />
-          )}
+          <div className="flex items-center gap-3">
+            {role.editLink ? (
+              <a href={role.editLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium text-gold-text hover:underline">
+                Open in MySched <ExternalLink size={14} />
+              </a>
+            ) : (
+              <span />
+            )}
+            {canDelete && (
+              <button
+                type="button"
+                onClick={onDelete}
+                disabled={deleting}
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-ink-soft transition-colors hover:border-stage-rose hover:text-stage-rose disabled:opacity-60"
+              >
+                {deleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                Delete
+              </button>
+            )}
+          </div>
           <button
             type="button"
             onClick={onToggle}
