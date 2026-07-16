@@ -43,7 +43,7 @@ export async function POST(req: Request) {
   // Map each row's member name to an account, creating new members as needed.
   const users = await listUsers();
   const byName = new Map(users.map((u) => [u.name.trim().toLowerCase(), u]));
-  const memberPasswordHash = await hashPassword("keystone");
+  const memberPasswordHash = await hashPassword("password");
   let accountsCreated = 0;
   let accentIdx = 0;
 

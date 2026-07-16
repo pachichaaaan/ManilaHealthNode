@@ -34,19 +34,22 @@ leads can additionally reset any member's password from **Team**.
 ```bash
 cd keystone-tracker
 npm install
-npm run seed        # clean slate: one team-lead account, no assignments
+npm run seed        # team roster (3 leads + 10 members), no assignments
 npm run dev         # http://localhost:3000  (launch.json uses 3009)
 ```
 
-### Account
+### Accounts
 
-`npm run seed` creates a single **team-lead** account and **no assignments** (a clean slate):
+`npm run seed` creates the team roster with **no assignments**. Login email is
+`firstname.lastname@manilahealthnode.com`; the default password is **`password`**
+(change it in **Account**).
 
-| Email | Role | Password |
-|-------|------|----------|
-| `patricia@keystone.team` | **Team lead** | `keystone` — change it in **Account** |
+- **Leads (3):** Aristotle Castro · Kacelyn Palma · Patricia Mamaril
+- **Members (10):** Chelsea Lopez · Jonas Caluyo · Earl Abeleda · Stephene Banagan ·
+  Brian Belen · Jon Cuevas · Kyle Gerente · Mar Mendoza · Meghana Paidi · Adrian Tan
 
-Add members from the **Team** page; add assignments from **Assignments** (or import a workbook).
+e.g. `aristotle.castro@manilahealthnode.com` / `password`. Manage the roster from
+**Team**; add assignments from **Assignments** (or import a workbook).
 
 ## Roles & access
 
@@ -72,7 +75,7 @@ Scoping is enforced in the **API** (not just the UI):
 
 The **Import** button on Assignments accepts a `BD_Plus1_Tracker.xlsx`. It parses the
 Master Tracker sheet, maps each row's member name to an account (auto-creating a
-member account — password `keystone` — for any new name), and **replaces the
+member account — password `password` — for any new name), and **replaces the
 assignments** (accounts are preserved). See [`lib/import.ts`](lib/import.ts).
 
 ## Deploying for the team
@@ -109,5 +112,5 @@ components/  webgl-background, tilt-card, ambient-background, dialogs, cards, na
 |--------|------|
 | `npm run dev` | Dev server |
 | `npm run build` | Production build |
-| `npm run seed` | Reset DB to a clean slate (1 lead account, 0 assignments) |
+| `npm run seed` | Reset DB to the team roster (13 accounts, 0 assignments) |
 | `npm run lint` | ESLint |
