@@ -379,6 +379,41 @@ export async function listInterestedRoles(userId: string): Promise<OpenRole[]> {
   return res.rows.map(toOpenRole);
 }
 
+export interface TeamRoleInterest {
+  roleId: string;
+  title: string;
+  client: string | null;
+  marketUnit: string | null;
+  status: string | null;
+  users: { id: string; name: string; accent: string; role: Role }[];
+}
+
+/** Roles that other team members have starred (for the lead's team view). */
+export async function listTeamInterests(excludeUserId: string): Promise<TeamRoleInterest[]> {
+  await ensureSchema();
+  const res = await getDb().execute({
+    sql: `SELECT r.id AS r_id, r.title, r.client, r.market_unit, r.status,
+                 u.id AS u_id, u.name AS u_name, u.accent AS u_accent, u.role AS u_role, i.created_at AS i_at
+          FROM role_interests i
+          JOIN roles r ON r.id = i.role_id
+          JOIN users u ON u.id = i.user_id
+          WHERE i.user_id != ?
+          ORDER BY i.created_at DESC`,
+    args: [excludeUserId],
+  });
+  const map = new Map<string, TeamRoleInterest>();
+  for (const row of res.rows) {
+    const rid = String(row.r_id);
+    let g = map.get(rid);
+    if (!g) {
+      g = { roleId: rid, title: String(row.title), client: s(row.client), marketUnit: s(row.market_unit), status: s(row.status), users: [] };
+      map.set(rid, g);
+    }
+    g.users.push({ id: String(row.u_id), name: String(row.u_name), accent: String(row.u_accent), role: String(row.u_role) as Role });
+  }
+  return [...map.values()];
+}
+
 export async function toggleInterest(userId: string, roleId: string): Promise<{ interested: boolean }> {
   await ensureSchema();
   const db = getDb();

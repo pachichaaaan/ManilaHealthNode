@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Activity, AlertTriangle, ArrowUpRight, Clock, Plus, Star } from "lucide-react";
 import { getSession } from "@/lib/auth";
-import { listAssignments, listInterestedRoles } from "@/lib/repo";
+import { listAssignments, listInterestedRoles, listTeamInterests } from "@/lib/repo";
 import { computeAnalytics } from "@/lib/analytics";
 import { CLASSIFICATION_META, roleStatusTone, WBS_META, WBS_STATES } from "@/lib/types";
 import { Card, CardTitle } from "@/components/card";
@@ -22,9 +22,10 @@ export default async function DashboardPage() {
   if (!session) redirect("/login");
 
   const isLead = session.role === "lead";
-  const [assignments, interestedRoles] = await Promise.all([
+  const [assignments, interestedRoles, teamInterests] = await Promise.all([
     listAssignments(isLead ? undefined : session.id),
     listInterestedRoles(session.id),
+    isLead ? listTeamInterests(session.id) : Promise.resolve([]),
   ]);
   const a = computeAnalytics(assignments);
   const firstName = session.name.split(" ")[0];
@@ -94,6 +95,55 @@ export default async function DashboardPage() {
                     }}
                   >
                     {r.status.replace(/^Open - /, "")}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      {/* team interest (lead only) */}
+      {isLead && teamInterests.length > 0 && (
+        <Card className="animate-fade-up" style={{ animationDelay: "280ms" }}>
+          <CardTitle
+            title="Team interest"
+            subtitle={`Roles your team has starred (${teamInterests.length})`}
+            action={
+              <Link href="/open-roles" className="inline-flex items-center gap-1 text-sm font-medium text-gold-text hover:underline">
+                Open Roles <ArrowUpRight size={15} />
+              </Link>
+            }
+          />
+          <ul className="flex flex-col divide-y divide-border">
+            {teamInterests.map((t) => (
+              <li key={t.roleId} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                <div className="flex -space-x-2">
+                  {t.users.slice(0, 5).map((u) => (
+                    <Avatar key={u.id} name={u.name} accent={u.accent} size={28} className="ring-2 ring-surface" />
+                  ))}
+                  {t.users.length > 5 && (
+                    <span className="grid h-7 w-7 place-items-center rounded-full bg-surface-2 text-[10px] font-semibold text-ink-soft ring-2 ring-surface">
+                      +{t.users.length - 5}
+                    </span>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium text-ink">{t.title}</div>
+                  <div className="truncate text-xs text-ink-faint">
+                    {t.users.map((u) => u.name).join(", ")}
+                    {t.client ? ` · ${t.client}` : ""}
+                  </div>
+                </div>
+                {t.status && (
+                  <span
+                    className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium"
+                    style={{
+                      background: `color-mix(in srgb, var(--stage-${roleStatusTone(t.status)}) 15%, transparent)`,
+                      color: `var(--stage-${roleStatusTone(t.status)}-fg)`,
+                    }}
+                  >
+                    {t.status.replace(/^Open - /, "")}
                   </span>
                 )}
               </li>
