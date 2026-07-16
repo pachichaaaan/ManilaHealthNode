@@ -5,6 +5,8 @@ import { Loader2, X } from "lucide-react";
 import {
   CLASSIFICATIONS,
   CLASSIFICATION_META,
+  KEY_PRIORITIES,
+  OFFERINGS,
   PRIORITIES,
   PRIORITY_META,
   STATUSES,
@@ -24,10 +26,13 @@ export type OwnerOption = { id: string; name: string };
 const inputCls =
   "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-gold focus-visible:ring-2 focus-visible:ring-gold/40";
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({ label, children, required }: { label: string; children: ReactNode; required?: boolean }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium text-ink-soft">{label}</span>
+      <span className="text-xs font-medium text-ink-soft">
+        {label}
+        {required && <span className="ml-0.5 text-stage-rose">*</span>}
+      </span>
       {children}
     </label>
   );
@@ -86,8 +91,23 @@ export function AssignmentDialog({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!client.trim()) {
-      setError("Client / organisation is required.");
+    const required: [string, string][] = [
+      [client, "Client / organisation"],
+      [title, "Assignment title"],
+      [role, "Role / grade"],
+      [gnPocName, "GN POC"],
+      [gnPocEmail, "GN POC email"],
+      [estimatedHours, "Estimated hours"],
+      [actualHours, "Actual hours"],
+      [wbsCode, "WBS code"],
+    ];
+    const missing = required.find(([v]) => !String(v).trim());
+    if (missing) {
+      setError(`${missing[1]} is required.`);
+      return;
+    }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(gnPocEmail.trim())) {
+      setError("Enter a valid GN POC email.");
       return;
     }
     setSaving(true);
@@ -166,8 +186,8 @@ export function AssignmentDialog({
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Client / organisation">
-              <input ref={firstRef} className={inputCls} value={client} onChange={(e) => setClient(e.target.value)} placeholder="e.g. Elevance Health" maxLength={160} />
+            <Field label="Client / organisation" required>
+              <input ref={firstRef} aria-required="true" className={inputCls} value={client} onChange={(e) => setClient(e.target.value)} placeholder="e.g. Elevance Health" maxLength={160} />
             </Field>
             {canAssign ? (
               <Field label="Owner">
@@ -178,35 +198,51 @@ export function AssignmentDialog({
                 </select>
               </Field>
             ) : (
-              <Field label="Assignment title">
-                <input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} />
+              <Field label="Assignment title" required>
+                <input aria-required="true" className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} />
               </Field>
             )}
             {canAssign && (
-              <Field label="Assignment title">
-                <input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} />
+              <Field label="Assignment title" required>
+                <input aria-required="true" className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} />
               </Field>
             )}
-            <Field label="Role / grade">
-              <input className={inputCls} value={role} onChange={(e) => setRole(e.target.value)} maxLength={80} />
+            <Field label="Role / grade" required>
+              <input aria-required="true" className={inputCls} value={role} onChange={(e) => setRole(e.target.value)} maxLength={80} />
             </Field>
-            <Field label="GN POC">
-              <input className={inputCls} value={gnPocName} onChange={(e) => setGnPocName(e.target.value)} placeholder="Global Network contact" maxLength={120} />
+            <Field label="GN POC" required>
+              <input aria-required="true" className={inputCls} value={gnPocName} onChange={(e) => setGnPocName(e.target.value)} placeholder="Global Network contact" maxLength={120} />
             </Field>
-            <Field label="GN POC email">
-              <input className={inputCls} type="email" value={gnPocEmail} onChange={(e) => setGnPocEmail(e.target.value)} placeholder="name@accenture.com" maxLength={160} />
+            <Field label="GN POC email" required>
+              <input aria-required="true" className={inputCls} type="email" value={gnPocEmail} onChange={(e) => setGnPocEmail(e.target.value)} placeholder="name@accenture.com" maxLength={160} />
             </Field>
             <Field label="Key priority (for +1)">
-              <input className={inputCls} value={keyPriority} onChange={(e) => setKeyPriority(e.target.value)} placeholder="e.g. Digital Health" maxLength={120} />
+              <select className={inputCls} value={keyPriority} onChange={(e) => setKeyPriority(e.target.value)}>
+                <option value="">— Select —</option>
+                {keyPriority && !(KEY_PRIORITIES as readonly string[]).includes(keyPriority) && (
+                  <option value={keyPriority}>{keyPriority}</option>
+                )}
+                {KEY_PRIORITIES.map((k) => (
+                  <option key={k} value={k}>{k}</option>
+                ))}
+              </select>
             </Field>
             <Field label="Offering / practice (for +1)">
-              <input className={inputCls} value={offering} onChange={(e) => setOffering(e.target.value)} placeholder="e.g. Digital Transformation" maxLength={120} />
+              <select className={inputCls} value={offering} onChange={(e) => setOffering(e.target.value)}>
+                <option value="">— Select —</option>
+                {offering && !(OFFERINGS as readonly string[]).includes(offering) && (
+                  <option value={offering}>{offering}</option>
+                )}
+                {OFFERINGS.map((o) => (
+                  <option key={o} value={o}>{o}</option>
+                ))}
+              </select>
             </Field>
-            <Field label="Estimated hours">
-              <input className={inputCls} inputMode="numeric" value={estimatedHours} onChange={(e) => setEstimatedHours(e.target.value.replace(/[^0-9]/g, ""))} placeholder="120" />
+            <Field label="Estimated hours" required>
+              <input aria-required="true" className={inputCls} inputMode="numeric" value={estimatedHours} onChange={(e) => setEstimatedHours(e.target.value.replace(/[^0-9]/g, ""))} placeholder="120" />
             </Field>
-            <Field label="Actual hours">
-              <input className={inputCls} inputMode="numeric" value={actualHours} onChange={(e) => setActualHours(e.target.value.replace(/[^0-9]/g, ""))} placeholder="0" />
+            <Field label="Actual hours" required>
+              <input aria-required="true" className={inputCls} inputMode="numeric" value={actualHours} onChange={(e) => setActualHours(e.target.value.replace(/[^0-9]/g, ""))} placeholder="0" />
             </Field>
             <Field label="Start date">
               <input className={inputCls} type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
@@ -227,8 +263,8 @@ export function AssignmentDialog({
                 ))}
               </select>
             </Field>
-            <Field label="WBS code">
-              <input className={inputCls} value={wbsCode} onChange={(e) => setWbsCode(e.target.value)} placeholder="WBS-XXXXXXX" maxLength={60} />
+            <Field label="WBS code" required>
+              <input aria-required="true" className={inputCls} value={wbsCode} onChange={(e) => setWbsCode(e.target.value)} placeholder="WBS-XXXXXXX" maxLength={60} />
             </Field>
             <Field label="Priority">
               <select className={inputCls} value={priority} onChange={(e) => setPriority(e.target.value as Priority)}>

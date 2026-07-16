@@ -19,10 +19,11 @@
   --border: #e5e9f2;
   --border-strong: #d3d9e8;
 
-  --gold: #d8a34a;
-  --gold-strong: #b9862a;
-  --gold-text: #8a6212;
-  --gold-tint: color-mix(in srgb, var(--gold) 16%, transparent);
+  /* Accenture purple is the signature accent (these tokens keep the --gold-* name). */
+  --gold: #a100ff;
+  --gold-strong: #7a00c4;
+  --gold-text: #7a00c4;
+  --gold-tint: color-mix(in srgb, var(--gold) 14%, transparent);
 
   --stage-slate: #64748b;
   --stage-slate-fg: #475569;
@@ -30,13 +31,13 @@
   --stage-sky-fg: #1b6fd6;
   --stage-amber: #e8963a;
   --stage-amber-fg: #b96c15;
-  --stage-gold: #d8a34a;
-  --stage-gold-fg: #8a6212;
+  --stage-gold: #a100ff;
+  --stage-gold-fg: #7a00c4;
   --stage-emerald: #14a46f;
   --stage-emerald-fg: #0b7b52;
   --stage-rose: #ec5b60;
   --stage-rose-fg: #c43439;
-  --accent-violet: #7c5cf0;
+  --accent-violet: #6a2bff;
 
   --shadow-sm: 0 1px 2px rgba(11, 17, 32, 0.06), 0 1px 3px rgba(11, 17, 32, 0.04);
   --shadow-md: 0 4px 12px rgba(11, 17, 32, 0.07), 0 2px 4px rgba(11, 17, 32, 0.04);
@@ -54,10 +55,10 @@
   --border: #1e2740;
   --border-strong: #2c3853;
 
-  --gold: #e7b75e;
-  --gold-strong: #f0c877;
-  --gold-text: #edc878;
-  --gold-tint: color-mix(in srgb, var(--gold) 20%, transparent);
+  --gold: #b76bff;
+  --gold-strong: #c88cff;
+  --gold-text: #cda0ff;
+  --gold-tint: color-mix(in srgb, var(--gold) 22%, transparent);
 
   --stage-slate: #8593ad;
   --stage-slate-fg: #9aa6bf;
@@ -65,13 +66,13 @@
   --stage-sky-fg: #7fc0ff;
   --stage-amber: #f0a863;
   --stage-amber-fg: #f3b77e;
-  --stage-gold: #e7b75e;
-  --stage-gold-fg: #edc878;
+  --stage-gold: #b76bff;
+  --stage-gold-fg: #cda0ff;
   --stage-emerald: #2bc489;
   --stage-emerald-fg: #58d6a5;
   --stage-rose: #f27377;
   --stage-rose-fg: #f79a9d;
-  --accent-violet: #a78bfa;
+  --accent-violet: #9a6bff;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.45);
@@ -227,38 +228,40 @@ body {
   to { background-position: 0 44px; }
 }
 
+/* Accenture-inspired: purple → magenta → electric-blue light. */
+/* Kept deliberately faint + soft — quiet ambient depth, not a glare. */
 .ambient-glow {
   position: absolute;
   border-radius: 9999px;
-  filter: blur(70px);
-  opacity: 0.32;
+  filter: blur(96px);
+  opacity: 0.12;
   will-change: transform;
 }
 .dark .ambient-glow {
-  opacity: 0.5;
+  opacity: 0.32;
 }
 .ambient-glow-1 {
-  width: 46vmax; height: 46vmax; left: -8vmax; top: -12vmax;
-  background: radial-gradient(circle, color-mix(in srgb, var(--gold) 60%, transparent), transparent 68%);
-  animation: drift-a 24s ease-in-out infinite;
+  width: 48vmax; height: 48vmax; left: -8vmax; top: -12vmax;
+  background: radial-gradient(circle, rgba(140, 90, 230, 0.38), transparent 72%);
+  animation: drift-a 30s ease-in-out infinite;
 }
 .ambient-glow-2 {
-  width: 40vmax; height: 40vmax; right: -6vmax; top: 6vmax;
-  background: radial-gradient(circle, color-mix(in srgb, var(--stage-sky) 45%, transparent), transparent 70%);
-  animation: drift-b 28s ease-in-out infinite;
+  width: 42vmax; height: 42vmax; right: -6vmax; top: 4vmax;
+  background: radial-gradient(circle, rgba(170, 105, 205, 0.28), transparent 74%);
+  animation: drift-b 34s ease-in-out infinite;
 }
 .ambient-glow-3 {
-  width: 38vmax; height: 38vmax; left: 28vmax; bottom: -14vmax;
-  background: radial-gradient(circle, color-mix(in srgb, var(--accent-violet) 38%, transparent), transparent 70%);
-  animation: drift-a 32s ease-in-out infinite reverse;
+  width: 40vmax; height: 40vmax; left: 26vmax; bottom: -14vmax;
+  background: radial-gradient(circle, rgba(95, 120, 215, 0.28), transparent 74%);
+  animation: drift-a 38s ease-in-out infinite reverse;
 }
 .ambient-grid {
   position: absolute;
   inset: auto 0 0 0;
   height: 52%;
   background-image:
-    linear-gradient(color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1px);
+    linear-gradient(rgba(140, 90, 230, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(140, 90, 230, 0.07) 1px, transparent 1px);
   background-size: 44px 44px;
   transform: perspective(420px) rotateX(62deg);
   transform-origin: bottom center;

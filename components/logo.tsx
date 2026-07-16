@@ -1,26 +1,31 @@
+"use client";
+
+import { useId } from "react";
 import { cn } from "@/lib/utils";
 
-/** The keystone mark: an arch with a gold keystone wedge at its apex. */
+/** Brand mark: a white chevron (>) on a purple gradient tile. */
 export function KeystoneMark({ className }: { className?: string }) {
+  // Unique gradient id per instance — avoids id collisions across the multiple
+  // marks on a page (which would break the fill).
+  const gid = `acc-chevron-${useId().replace(/:/g, "")}`;
   return (
     <svg viewBox="0 0 32 32" fill="none" aria-hidden="true" className={className}>
+      <defs>
+        <linearGradient id={gid} x1="0" y1="1" x2="1" y2="0">
+          <stop offset="0%" stopColor="#2a0b5e" />
+          <stop offset="55%" stopColor="#6a24c8" />
+          <stop offset="100%" stopColor="#a24dff" />
+        </linearGradient>
+      </defs>
+      <rect x="0.5" y="0.5" width="31" height="31" rx="7" fill={`url(#${gid})`} />
       <path
-        d="M5 26.5a11 11 0 0 1 22 0"
-        stroke="currentColor"
-        strokeOpacity="0.35"
-        strokeWidth="2"
+        d="M11 8.5 L21.5 16 L11 23.5"
+        fill="none"
+        stroke="#ffffff"
+        strokeWidth="5"
         strokeLinecap="round"
+        strokeLinejoin="miter"
       />
-      <path
-        d="M6.5 26.5a9.5 9.5 0 0 1 19 0"
-        stroke="currentColor"
-        strokeOpacity="0.18"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      {/* keystone wedge */}
-      <path d="M12.4 6.2h7.2l-1.5 9.2h-4.2z" fill="var(--gold)" />
-      <path d="M12.4 6.2h7.2l-1.5 9.2h-4.2z" stroke="var(--gold-strong)" strokeWidth="0.6" />
     </svg>
   );
 }

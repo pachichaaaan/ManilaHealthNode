@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardList, FileCheck2, LayoutDashboard, Star, Users, type LucideIcon } from "lucide-react";
+import { ClipboardList, Compass, FileCheck2, LayoutDashboard, Star, Users, type LucideIcon } from "lucide-react";
 import { Logo } from "./logo";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/lib/types";
@@ -12,6 +12,7 @@ type NavItem = { href: string; label: string; icon: LucideIcon; leadOnly?: boole
 const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/assignments", label: "Assignments", icon: ClipboardList },
+  { href: "/open-roles", label: "Open Roles", icon: Compass },
   { href: "/plus-one", label: "Plus 1", icon: Star },
   { href: "/wbs", label: "WBS", icon: FileCheck2 },
   { href: "/team", label: "Team", icon: Users, leadOnly: true },
@@ -65,7 +66,7 @@ export function Sidebar({ role }: { role: Role }) {
 export function MobileNav({ role }: { role: Role }) {
   const pathname = usePathname();
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 flex items-stretch overflow-x-auto border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
       {itemsFor(role).map((item) => {
         const active = isActive(pathname, item.href);
         const Icon = item.icon;
@@ -75,7 +76,7 @@ export function MobileNav({ role }: { role: Role }) {
             href={item.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition-colors",
+              "flex shrink-0 basis-1/5 min-w-[68px] flex-col items-center gap-1 whitespace-nowrap px-2 py-2.5 text-[11px] font-medium transition-colors",
               active ? "text-gold-text" : "text-ink-faint",
             )}
           >

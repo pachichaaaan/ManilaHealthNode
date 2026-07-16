@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { LoginForm } from "@/components/login-form";
 import { KeystoneMark, Logo } from "@/components/logo";
-import { WebglBackground } from "@/components/webgl-background";
 
 const HIGHLIGHTS = [
   "Members manage their own BD & +1 work",
@@ -15,17 +14,27 @@ export default async function LoginPage() {
   if (session) redirect("/dashboard");
 
   return (
-    <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-[#0a0f1c] p-4 sm:p-6">
-      <WebglBackground className="absolute inset-0 block h-full w-full" />
-      <div className="pointer-events-none absolute inset-0 bg-black/10" />
+    <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-bg p-4 sm:p-6">
+      {/* soft brand glow */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute left-1/2 top-[-30vh] h-[62vh] w-[110vw] -translate-x-1/2 rounded-[50%] blur-[130px]"
+        style={{
+          background: "radial-gradient(closest-side, color-mix(in srgb, var(--gold) 22%, transparent), transparent)",
+          opacity: 0.35,
+        }}
+      />
 
-      <div className="relative z-10 w-full max-w-4xl animate-fade-up overflow-hidden rounded-2xl border border-white/10 bg-surface/70 shadow-[var(--shadow-lg)] backdrop-blur-2xl">
+      <div className="relative z-10 w-full max-w-4xl animate-fade-up overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow-lg)]">
         <div className="grid lg:grid-cols-[1.05fr_1fr]">
           {/* brand */}
-          <div className="relative hidden flex-col justify-between gap-6 border-r border-border/60 p-8 lg:flex xl:p-10">
+          <div
+            className="relative hidden flex-col justify-between gap-6 border-r border-border p-8 lg:flex xl:p-10"
+            style={{ background: "linear-gradient(160deg, color-mix(in srgb, var(--gold) 9%, var(--surface)), var(--surface))" }}
+          >
             <Logo />
             <div className="flex justify-center py-2">
-              <KeystoneMark className="h-28 w-28 animate-float text-ink [filter:drop-shadow(0_14px_34px_color-mix(in_srgb,var(--gold)_45%,transparent))]" />
+              <KeystoneMark className="h-24 w-24 animate-float [filter:drop-shadow(0_12px_30px_color-mix(in_srgb,var(--gold)_35%,transparent))]" />
             </div>
             <div>
               <h1 className="font-display text-3xl font-semibold leading-[1.08] tracking-tight text-ink xl:text-4xl">

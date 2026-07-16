@@ -61,6 +61,46 @@ CREATE TABLE IF NOT EXISTS assignments (
 CREATE INDEX IF NOT EXISTS idx_assignments_owner ON assignments(owner_id);
 CREATE INDEX IF NOT EXISTS idx_assignments_class ON assignments(classification);
 CREATE INDEX IF NOT EXISTS idx_assignments_status ON assignments(status);
+CREATE TABLE IF NOT EXISTS roles (
+  id TEXT PRIMARY KEY,
+  role_id TEXT,
+  title TEXT NOT NULL,
+  client TEXT,
+  industry TEXT,
+  market_unit TEXT,
+  country TEXT,
+  project TEXT,
+  job_family_group TEXT,
+  project_role TEXT,
+  status TEXT,
+  demand_type TEXT,
+  priority TEXT,
+  location_type TEXT,
+  work_location TEXT,
+  career_from TEXT,
+  career_to TEXT,
+  primary_skill TEXT,
+  skill_group TEXT,
+  language TEXT,
+  start_date TEXT,
+  end_date TEXT,
+  win_probability TEXT,
+  primary_contact TEXT,
+  primary_contact_email TEXT,
+  cn_poc TEXT,
+  description TEXT,
+  edit_link TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_roles_status ON roles(status);
+CREATE INDEX IF NOT EXISTS idx_roles_market ON roles(market_unit);
+CREATE TABLE IF NOT EXISTS role_interests (
+  user_id TEXT NOT NULL,
+  role_id TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, role_id)
+);
+CREATE INDEX IF NOT EXISTS idx_interests_user ON role_interests(user_id);
 `;
 
 /** Idempotently ensure the schema exists. Memoised for the process lifetime. */

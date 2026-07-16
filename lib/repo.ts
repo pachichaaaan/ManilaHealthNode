@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { ensureSchema, getDb } from "./db";
-import type { Assignment, Classification, Priority, PublicUser, Role, Status, WbsState } from "./types";
+import type { Assignment, Classification, OpenRole, OpenRoleFields, Priority, PublicUser, Role, Status, WbsState } from "./types";
 
 type Row = Record<string, unknown>;
 
@@ -286,4 +286,115 @@ export async function clearAll(): Promise<void> {
 export async function clearAssignments(): Promise<void> {
   await ensureSchema();
   await getDb().execute("DELETE FROM assignments");
+}
+
+/* ------------------------------ Open Roles -------------------------------- */
+
+function toOpenRole(r: Row): OpenRole {
+  return {
+    id: String(r.id),
+    roleId: r.role_id == null ? "" : String(r.role_id),
+    title: String(r.title),
+    client: s(r.client),
+    industry: s(r.industry),
+    marketUnit: s(r.market_unit),
+    country: s(r.country),
+    project: s(r.project),
+    jobFamilyGroup: s(r.job_family_group),
+    projectRole: s(r.project_role),
+    status: s(r.status),
+    demandType: s(r.demand_type),
+    priority: s(r.priority),
+    locationType: s(r.location_type),
+    workLocation: s(r.work_location),
+    careerFrom: s(r.career_from),
+    careerTo: s(r.career_to),
+    primarySkill: s(r.primary_skill),
+    skillGroup: s(r.skill_group),
+    language: s(r.language),
+    startDate: s(r.start_date),
+    endDate: s(r.end_date),
+    winProbability: s(r.win_probability),
+    primaryContact: s(r.primary_contact),
+    primaryContactEmail: s(r.primary_contact_email),
+    cnPoc: s(r.cn_poc),
+    description: s(r.description),
+    editLink: s(r.edit_link),
+    createdAt: String(r.created_at),
+  };
+}
+
+export async function listRoles(): Promise<OpenRole[]> {
+  await ensureSchema();
+  const res = await getDb().execute("SELECT * FROM roles ORDER BY title ASC");
+  return res.rows.map(toOpenRole);
+}
+
+const ROLE_COLS =
+  "id, role_id, title, client, industry, market_unit, country, project, job_family_group, project_role, status, demand_type, priority, location_type, work_location, career_from, career_to, primary_skill, skill_group, language, start_date, end_date, win_probability, primary_contact, primary_contact_email, cn_poc, description, edit_link";
+
+export async function insertRoles(rows: OpenRoleFields[]): Promise<number> {
+  await ensureSchema();
+  const db = getDb();
+  const placeholders = `(${new Array(28).fill("?").join(",")})`;
+  const stmts = rows.map((r) => ({
+    sql: `INSERT INTO roles (${ROLE_COLS}) VALUES ${placeholders}`,
+    args: [
+      randomUUID(), r.roleId, r.title, r.client ?? null, r.industry ?? null, r.marketUnit ?? null,
+      r.country ?? null, r.project ?? null, r.jobFamilyGroup ?? null, r.projectRole ?? null,
+      r.status ?? null, r.demandType ?? null, r.priority ?? null, r.locationType ?? null,
+      r.workLocation ?? null, r.careerFrom ?? null, r.careerTo ?? null, r.primarySkill ?? null,
+      r.skillGroup ?? null, r.language ?? null, r.startDate ?? null, r.endDate ?? null,
+      r.winProbability ?? null, r.primaryContact ?? null, r.primaryContactEmail ?? null,
+      r.cnPoc ?? null, r.description ?? null, r.editLink ?? null,
+    ] as (string | null)[],
+  }));
+  const CHUNK = 200;
+  for (let i = 0; i < stmts.length; i += CHUNK) {
+    await db.batch(stmts.slice(i, i + CHUNK));
+  }
+  return rows.length;
+}
+
+export async function clearRoles(): Promise<void> {
+  await ensureSchema();
+  await getDb().executeMultiple("DELETE FROM role_interests; DELETE FROM roles;");
+}
+
+export async function listInterestedRoleIds(userId: string): Promise<string[]> {
+  await ensureSchema();
+  const res = await getDb().execute({
+    sql: "SELECT role_id FROM role_interests WHERE user_id = ?",
+    args: [userId],
+  });
+  return res.rows.map((r) => String(r.role_id));
+}
+
+export async function listInterestedRoles(userId: string): Promise<OpenRole[]> {
+  await ensureSchema();
+  const res = await getDb().execute({
+    sql: `SELECT r.* FROM roles r JOIN role_interests i ON i.role_id = r.id WHERE i.user_id = ? ORDER BY i.created_at DESC`,
+    args: [userId],
+  });
+  return res.rows.map(toOpenRole);
+}
+
+export async function toggleInterest(userId: string, roleId: string): Promise<{ interested: boolean }> {
+  await ensureSchema();
+  const db = getDb();
+  const existing = await db.execute({
+    sql: "SELECT 1 FROM role_interests WHERE user_id = ? AND role_id = ? LIMIT 1",
+    args: [userId, roleId],
+  });
+  if (existing.rows.length > 0) {
+    await db.execute({ sql: "DELETE FROM role_interests WHERE user_id = ? AND role_id = ?", args: [userId, roleId] });
+    return { interested: false };
+  }
+  const role = await db.execute({ sql: "SELECT 1 FROM roles WHERE id = ? LIMIT 1", args: [roleId] });
+  if (role.rows.length === 0) throw new Error("Role not found");
+  await db.execute({
+    sql: "INSERT INTO role_interests (user_id, role_id, created_at) VALUES (?, ?, ?)",
+    args: [userId, roleId, new Date().toISOString()],
+  });
+  return { interested: true };
 }

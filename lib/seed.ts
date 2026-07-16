@@ -5,9 +5,10 @@
  */
 process.loadEnvFile(".env");
 
+import { readFileSync } from "node:fs";
 import { hashPassword } from "./password";
-import { clearAll, createUser } from "./repo";
-import type { Role } from "./types";
+import { clearAll, clearRoles, createUser, insertRoles } from "./repo";
+import type { OpenRoleFields, Role } from "./types";
 
 const DOMAIN = "manilahealthnode.com";
 const DEFAULT_PASSWORD = "password";
@@ -53,7 +54,14 @@ async function main() {
     i += 1;
   }
 
-  console.log(`✓ Seeded ${roster.length} accounts (${LEADS.length} leads, ${MEMBERS.length} members), no assignments.`);
+  console.log("→ Loading open roles…");
+  await clearRoles();
+  const roles = JSON.parse(
+    readFileSync(new URL("./data/open-roles.json", import.meta.url), "utf8"),
+  ) as OpenRoleFields[];
+  await insertRoles(roles);
+
+  console.log(`✓ Seeded ${roster.length} accounts (${LEADS.length} leads, ${MEMBERS.length} members) and ${roles.length} open roles.`);
   console.log(`\n  All passwords: ${DEFAULT_PASSWORD}`);
   for (const p of roster) console.log(`    ${p.role === "lead" ? "LEAD  " : "member"}  ${emailFor(p.name)}`);
 }

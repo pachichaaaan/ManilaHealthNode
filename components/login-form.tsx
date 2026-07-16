@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ArrowRight, Loader2, LockKeyhole, Mail } from "lucide-react";
 
@@ -8,7 +7,6 @@ const inputCls =
   "w-full rounded-lg border border-border bg-surface/80 py-2.5 pl-9 pr-3 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-gold focus-visible:ring-2 focus-visible:ring-gold/40";
 
 export function LoginForm() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -30,8 +28,9 @@ export function LoginForm() {
         setLoading(false);
         return;
       }
-      router.push("/dashboard");
-      router.refresh();
+      // Full-page navigation clears the client router cache so the new
+      // session's per-user data always renders fresh.
+      window.location.assign("/dashboard");
     } catch {
       setError("Network error. Please try again.");
       setLoading(false);

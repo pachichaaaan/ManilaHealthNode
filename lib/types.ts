@@ -27,6 +27,32 @@ export const ROLE_META: Record<Role, { label: string }> = {
 export const ACCENTS = ["gold", "sky", "emerald", "rose", "violet", "slate"] as const;
 export type Accent = (typeof ACCENTS)[number];
 
+/** +1 alignment dropdown options. */
+export const KEY_PRIORITIES = [
+  "Strategy & Transformation",
+  "Digital Health",
+  "Data & Analytics",
+  "Sustainability",
+  "Cloud",
+  "Applied Intelligence",
+  "Customer & Growth",
+  "Talent & Organisation",
+  "Operating Model",
+] as const;
+
+export const OFFERINGS = [
+  "Health IT",
+  "Digital Transformation",
+  "Workforce",
+  "Financial Mgmt",
+  "Applied Intelligence",
+  "Operating Model",
+  "Strategy & Consulting",
+  "Platforms",
+  "Ventures",
+  "Market Research",
+] as const;
+
 export interface PublicUser {
   id: string;
   name: string;
@@ -112,4 +138,59 @@ export function wbsNeedsAction(a: Pick<Assignment, "wbsProvided">): boolean {
 
 export function isClassification(v: unknown): v is Classification {
   return typeof v === "string" && (CLASSIFICATIONS as readonly string[]).includes(v);
+}
+
+/* ------------------------------ Open Roles -------------------------------- */
+
+/** A row from the Open Roles workbook (Shortlisted Roles). */
+export interface OpenRoleFields {
+  roleId: string;
+  title: string;
+  client: string | null;
+  industry: string | null;
+  marketUnit: string | null;
+  country: string | null;
+  project: string | null;
+  jobFamilyGroup: string | null;
+  projectRole: string | null;
+  status: string | null;
+  demandType: string | null;
+  priority: string | null;
+  locationType: string | null;
+  workLocation: string | null;
+  careerFrom: string | null;
+  careerTo: string | null;
+  primarySkill: string | null;
+  skillGroup: string | null;
+  language: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  winProbability: string | null;
+  primaryContact: string | null;
+  primaryContactEmail: string | null;
+  cnPoc: string | null;
+  description: string | null;
+  editLink: string | null;
+}
+
+export interface OpenRole extends OpenRoleFields {
+  id: string;
+  createdAt: string;
+}
+
+/** tone for a role priority chip */
+export function priorityTone(priority: string | null): Tone {
+  const p = (priority ?? "").toLowerCase();
+  if (p.includes("critical")) return "rose";
+  if (p.includes("high")) return "amber";
+  return "slate";
+}
+
+/** tone for a role status chip */
+export function roleStatusTone(status: string | null): Tone {
+  const s = (status ?? "").toLowerCase();
+  if (s.includes("new")) return "emerald";
+  if (s.includes("feedback")) return "amber";
+  if (s.includes("process")) return "sky";
+  return "slate";
 }

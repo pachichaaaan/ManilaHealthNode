@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { LogOut } from "lucide-react";
 import { Avatar } from "./avatar";
@@ -10,14 +9,13 @@ import { Logo } from "./logo";
 import { ROLE_META, type PublicUser } from "@/lib/types";
 
 export function Topbar({ user }: { user: PublicUser }) {
-  const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
 
   async function logout() {
     setLoggingOut(true);
     await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-    router.refresh();
+    // Full-page navigation clears cached per-user pages from the router cache.
+    window.location.assign("/login");
   }
 
   return (

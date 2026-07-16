@@ -2,12 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Activity, AlertTriangle, ArrowUpRight, Clock, Plus, Star } from "lucide-react";
 import { getSession } from "@/lib/auth";
-import { listAssignments } from "@/lib/repo";
+import { listAssignments, listInterestedRoles } from "@/lib/repo";
 import { computeAnalytics } from "@/lib/analytics";
-import { CLASSIFICATION_META, WBS_META, WBS_STATES } from "@/lib/types";
+import { CLASSIFICATION_META, roleStatusTone, WBS_META, WBS_STATES } from "@/lib/types";
 import { Card, CardTitle } from "@/components/card";
 import { StatCard } from "@/components/stat-card";
-import { DashboardHero } from "@/components/dashboard-hero";
 import { HoursArc } from "@/components/hours-arc";
 import { HoursBars } from "@/components/hours-bars";
 import { EndingSoon } from "@/components/ending-soon";
@@ -23,7 +22,10 @@ export default async function DashboardPage() {
   if (!session) redirect("/login");
 
   const isLead = session.role === "lead";
-  const assignments = await listAssignments(isLead ? undefined : session.id);
+  const [assignments, interestedRoles] = await Promise.all([
+    listAssignments(isLead ? undefined : session.id),
+    listInterestedRoles(session.id),
+  ]);
   const a = computeAnalytics(assignments);
   const firstName = session.name.split(" ")[0];
   const today = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
@@ -31,28 +33,26 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* WebGL hero masthead */}
-      <DashboardHero>
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-sm text-white/50">{today}</p>
-            <h1 className="mt-1 font-display text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-              {isLead ? `Good to see you, ${firstName}.` : session.name}
-            </h1>
-            <p className="mt-1 text-sm text-white/70">
-              {isLead
-                ? a.members.length > 0
-                  ? `Team overview · ${a.total} assignments across ${a.members.length} ${a.members.length === 1 ? "person" : "people"}`
-                  : "Team overview · no assignments yet"
-                : `${session.title ?? "Consultant"} · ${a.total} assignments · ${a.activeCount} active`}
-            </p>
-          </div>
-          <Link href="/assignments" className="inline-flex h-10 items-center gap-2 rounded-lg bg-white px-4 text-sm font-semibold text-[#0a0f1c] transition-transform hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0f1c]">
-            <Plus size={16} />
-            Add assignment
-          </Link>
+      {/* header */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-sm text-ink-faint">{today}</p>
+          <h1 className="mt-1 font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+            {isLead ? `Good to see you, ${firstName}.` : session.name}
+          </h1>
+          <p className="mt-1 text-sm text-ink-soft">
+            {isLead
+              ? a.members.length > 0
+                ? `Team overview · ${a.total} assignments across ${a.members.length} ${a.members.length === 1 ? "person" : "people"}`
+                : "Team overview · no assignments yet"
+              : `${session.title ?? "Consultant"} · ${a.total} assignments · ${a.activeCount} active`}
+          </p>
         </div>
-      </DashboardHero>
+        <Link href="/assignments" className="inline-flex h-10 items-center gap-2 rounded-lg bg-ink px-4 text-sm font-semibold text-surface transition-transform hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-bg">
+          <Plus size={16} />
+          Add assignment
+        </Link>
+      </div>
 
       {/* KPIs (3D tilt) */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -61,6 +61,46 @@ export default async function DashboardPage() {
         <TiltCard><StatCard label="Hours logged" value={a.actualHours} kind="hours" tone="sky" icon={<Clock size={16} />} hint={`of ${formatHours(a.estimatedHours)} planned`} delay={140} /></TiltCard>
         <TiltCard><StatCard label="WBS to action" value={a.wbsActionCount} tone="rose" icon={<AlertTriangle size={16} />} hint="Codes not provided" delay={210} /></TiltCard>
       </div>
+
+      {/* interested open roles */}
+      {interestedRoles.length > 0 && (
+        <Card className="animate-fade-up" style={{ animationDelay: "240ms" }}>
+          <CardTitle
+            title="Roles you're interested in"
+            subtitle={`${interestedRoles.length} starred open role${interestedRoles.length === 1 ? "" : "s"}`}
+            action={
+              <Link href="/open-roles" className="inline-flex items-center gap-1 text-sm font-medium text-gold-text hover:underline">
+                Open Roles <ArrowUpRight size={15} />
+              </Link>
+            }
+          />
+          <ul className="flex flex-col divide-y divide-border">
+            {interestedRoles.map((r) => (
+              <li key={r.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                <Star size={15} className="shrink-0 fill-[var(--gold)] text-gold" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium text-ink">{r.title}</div>
+                  <div className="truncate text-xs text-ink-faint">
+                    {r.client ?? "—"}
+                    {r.marketUnit ? ` · ${r.marketUnit}` : ""}
+                  </div>
+                </div>
+                {r.status && (
+                  <span
+                    className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium"
+                    style={{
+                      background: `color-mix(in srgb, var(--stage-${roleStatusTone(r.status)}) 15%, transparent)`,
+                      color: `var(--stage-${roleStatusTone(r.status)}-fg)`,
+                    }}
+                  >
+                    {r.status.replace(/^Open - /, "")}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {/* arc + hours */}
       <div className="grid gap-4 lg:grid-cols-3">
