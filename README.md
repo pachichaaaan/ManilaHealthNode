@@ -25,7 +25,7 @@ leads can additionally reset any member's password from **Team**.
 | Framework | Next.js 16 (App Router) · React 19 · TypeScript |
 | Styling   | Tailwind CSS v4 (token system in `app/globals.css`) |
 | 3D / motion | Custom WebGL shader (`webgl-background`), CSS-3D tilt + ambient depth, Framer Motion |
-| Database  | libSQL (`@libsql/client`) — local SQLite file, deployable to Turso |
+| Database  | Supabase Postgres (`@supabase/supabase-js`) — server-side only, RLS locked |
 | Auth      | Hand-rolled: bcrypt + `jose` httpOnly JWT cookie, roles enforced server-side |
 | Import    | `exceljs` (leader-only workbook import) |
 
@@ -78,17 +78,25 @@ Master Tracker sheet, maps each row's member name to an account (auto-creating a
 member account — password `password` — for any new name), and **replaces the
 assignments** (accounts are preserved). See [`lib/import.ts`](lib/import.ts).
 
-## Deploying for the team
+## Configuration
 
-Point at a hosted **Turso** database (libSQL) — no code changes:
+Data lives in **Supabase Postgres**. Every query runs server-side (Server
+Components, Route Handlers) through the secret key, which bypasses RLS. Each
+table has RLS enabled with **no policies**, so the publishable key cannot read
+or write anything from a browser — `users.password_hash` is never reachable
+from the client.
+
+Set these in `.env` (gitignored; also read by `npm run seed`):
 
 ```
-DATABASE_URL=libsql://your-db.turso.io
-DATABASE_AUTH_TOKEN=your-token
-AUTH_SECRET=<a long random string>
+NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+SUPABASE_SECRET_KEY=sb_secret_...          # server-only — never NEXT_PUBLIC_
+AUTH_SECRET=<a long random string>         # openssl rand -base64 32
 ```
 
-Then `npm run build && npm start`. Schema auto-creates on first connection.
+Then `npm run build && npm start`. Unlike the previous libSQL setup, the schema
+does **not** auto-create — it's owned by Supabase migrations.
 
 ## Project structure
 

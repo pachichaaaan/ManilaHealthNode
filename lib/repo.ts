@@ -1,11 +1,22 @@
 import { randomUUID } from "node:crypto";
-import { ensureSchema, getDb } from "./db";
+import type { PostgrestError } from "@supabase/supabase-js";
+import { getDb } from "./db";
 import type { Assignment, Classification, OpenRole, OpenRoleFields, Priority, PublicUser, Role, Status, WbsState } from "./types";
 
 type Row = Record<string, unknown>;
 
 function s(v: unknown): string | null {
   return v == null ? null : String(v);
+}
+
+/** Throw on a PostgREST error, mirroring how the libSQL driver used to reject. */
+function check(error: PostgrestError | null): void {
+  if (error) throw new Error(error.message);
+}
+
+function unwrap<T>(res: { data: T | null; error: PostgrestError | null }): T {
+  check(res.error);
+  return res.data as T;
 }
 
 /* ---------------------------------- Users --------------------------------- */
@@ -22,34 +33,33 @@ function toPublicUser(r: Row): PublicUser {
     role: String(r.role) as Role,
     title: s(r.title),
     accent: String(r.accent),
-    active: Number(r.active) === 1,
+    active: r.active === true,
   };
 }
 
 export async function getUserByEmail(email: string): Promise<FullUser | null> {
-  await ensureSchema();
-  const res = await getDb().execute({
-    sql: "SELECT * FROM users WHERE email = ? LIMIT 1",
-    args: [email.toLowerCase()],
-  });
-  const r = res.rows[0];
+  const r = unwrap(
+    await getDb().from("users").select("*").eq("email", email.toLowerCase()).limit(1).maybeSingle(),
+  ) as Row | null;
   if (!r) return null;
   return { ...toPublicUser(r), passwordHash: String(r.password_hash) };
 }
 
 export async function getUserById(id: string): Promise<PublicUser | null> {
-  await ensureSchema();
-  const res = await getDb().execute({ sql: "SELECT * FROM users WHERE id = ? LIMIT 1", args: [id] });
-  const r = res.rows[0];
+  const r = unwrap(
+    await getDb().from("users").select("*").eq("id", id).limit(1).maybeSingle(),
+  ) as Row | null;
   return r ? toPublicUser(r) : null;
 }
 
 export async function listUsers(): Promise<PublicUser[]> {
-  await ensureSchema();
-  const res = await getDb().execute(
-    "SELECT * FROM users ORDER BY CASE role WHEN 'lead' THEN 0 ELSE 1 END, name ASC",
-  );
-  return res.rows.map(toPublicUser);
+  const rows = unwrap(await getDb().from("users").select("*")) as Row[];
+  // Leads first, then by name — previously an ORDER BY CASE, which PostgREST
+  // can't express. The roster is small, so ordering here costs nothing.
+  return rows.map(toPublicUser).sort((a, b) => {
+    const rank = (u: PublicUser) => (u.role === "lead" ? 0 : 1);
+    return rank(a) - rank(b) || a.name.localeCompare(b.name);
+  });
 }
 
 export interface NewUser {
@@ -62,14 +72,24 @@ export interface NewUser {
 }
 
 export async function createUser(u: NewUser): Promise<PublicUser> {
-  await ensureSchema();
   const id = randomUUID();
   const now = new Date().toISOString();
-  await getDb().execute({
-    sql: `INSERT INTO users (id, name, email, password_hash, role, title, accent, active, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-    args: [id, u.name, u.email.toLowerCase(), u.passwordHash, u.role ?? "member", u.title ?? null, u.accent ?? "sky", now, now],
-  });
+  check(
+    (
+      await getDb().from("users").insert({
+        id,
+        name: u.name,
+        email: u.email.toLowerCase(),
+        password_hash: u.passwordHash,
+        role: u.role ?? "member",
+        title: u.title ?? null,
+        accent: u.accent ?? "sky",
+        active: true,
+        created_at: now,
+        updated_at: now,
+      })
+    ).error,
+  );
   const created = await getUserById(id);
   if (!created) throw new Error("Failed to create user");
   return created;
@@ -96,45 +116,37 @@ const USER_PATCH_COLUMNS: Record<keyof UserPatch, string> = {
 };
 
 export async function updateUser(id: string, patch: UserPatch): Promise<PublicUser | null> {
-  await ensureSchema();
-  const sets: string[] = [];
-  const args: (string | number | null)[] = [];
+  const row: Row = {};
   for (const key of Object.keys(USER_PATCH_COLUMNS) as (keyof UserPatch)[]) {
     const value = patch[key];
     if (value === undefined) continue;
-    sets.push(`${USER_PATCH_COLUMNS[key]} = ?`);
-    if (key === "active") args.push(value ? 1 : 0);
-    else if (key === "email") args.push(String(value).toLowerCase());
-    else args.push(value as string | null);
+    row[USER_PATCH_COLUMNS[key]] = key === "email" ? String(value).toLowerCase() : value;
   }
-  if (sets.length === 0) return getUserById(id);
-  sets.push("updated_at = ?");
-  args.push(new Date().toISOString());
-  args.push(id);
-  await getDb().execute({ sql: `UPDATE users SET ${sets.join(", ")} WHERE id = ?`, args });
+  if (Object.keys(row).length === 0) return getUserById(id);
+  row.updated_at = new Date().toISOString();
+  check((await getDb().from("users").update(row).eq("id", id)).error);
   return getUserById(id);
 }
 
+/** Assignments and role interests follow via ON DELETE CASCADE. */
 export async function deleteUser(id: string): Promise<void> {
-  await ensureSchema();
-  await getDb().execute({ sql: "DELETE FROM assignments WHERE owner_id = ?", args: [id] });
-  await getDb().execute({ sql: "DELETE FROM users WHERE id = ?", args: [id] });
+  check((await getDb().from("users").delete().eq("id", id)).error);
 }
 
 /* ------------------------------- Assignments ------------------------------ */
 
-const SELECT = `
-SELECT a.*, u.name AS o_name, u.accent AS o_accent
-FROM assignments a
-JOIN users u ON u.id = a.owner_id`;
+/** Assignment columns plus the owner's display name/accent (an INNER JOIN on
+ *  users, resolved through the assignments.owner_id foreign key). */
+const SELECT = "*, owner:users!inner(name, accent)";
 
 function toAssignment(r: Row): Assignment {
+  const owner = (r.owner ?? {}) as Row;
   return {
     id: String(r.id),
     seq: Number(r.seq),
     ownerId: String(r.owner_id),
-    member: String(r.o_name),
-    ownerAccent: String(r.o_accent),
+    member: String(owner.name),
+    ownerAccent: String(owner.accent),
     role: s(r.role),
     title: s(r.title),
     client: String(r.client),
@@ -152,7 +164,7 @@ function toAssignment(r: Row): Assignment {
     priority: String(r.priority) as Priority,
     status: String(r.status) as Status,
     notes: s(r.notes),
-    archived: Number(r.archived) === 1,
+    archived: r.archived === true,
     lastUpdated: s(r.last_updated),
     createdAt: String(r.created_at),
     updatedAt: String(r.updated_at),
@@ -168,24 +180,20 @@ export async function listAssignments(
   ownerId?: string,
   opts: { archived?: boolean } = {},
 ): Promise<Assignment[]> {
-  await ensureSchema();
-  const conds = ["a.archived = ?"];
-  const args: (string | number)[] = [opts.archived ? 1 : 0];
-  if (ownerId) {
-    conds.push("a.owner_id = ?");
-    args.push(ownerId);
-  }
-  const res = await getDb().execute({
-    sql: `${SELECT} WHERE ${conds.join(" AND ")} ORDER BY a.seq ASC`,
-    args,
-  });
-  return res.rows.map(toAssignment);
+  let q = getDb()
+    .from("assignments")
+    .select(SELECT)
+    .eq("archived", opts.archived === true)
+    .order("seq", { ascending: true });
+  if (ownerId) q = q.eq("owner_id", ownerId);
+  const rows = unwrap(await q) as Row[];
+  return rows.map(toAssignment);
 }
 
 export async function getAssignmentById(id: string): Promise<Assignment | null> {
-  await ensureSchema();
-  const res = await getDb().execute({ sql: `${SELECT} WHERE a.id = ? LIMIT 1`, args: [id] });
-  const r = res.rows[0];
+  const r = unwrap(
+    await getDb().from("assignments").select(SELECT).eq("id", id).limit(1).maybeSingle(),
+  ) as Row | null;
   return r ? toAssignment(r) : null;
 }
 
@@ -213,28 +221,44 @@ export interface AssignmentInput {
 }
 
 export async function createAssignment(a: AssignmentInput): Promise<Assignment> {
-  await ensureSchema();
   const id = randomUUID();
   const now = new Date().toISOString();
   let seq = a.seq;
   if (seq == null) {
-    const max = await getDb().execute("SELECT COALESCE(MAX(seq), 0) AS m FROM assignments");
-    seq = Number(max.rows[0]?.m ?? 0) + 1;
+    const top = unwrap(
+      await getDb().from("assignments").select("seq").order("seq", { ascending: false }).limit(1).maybeSingle(),
+    ) as Row | null;
+    seq = Number(top?.seq ?? 0) + 1;
   }
-  await getDb().execute({
-    sql: `INSERT INTO assignments
-      (id, seq, owner_id, role, title, client, classification, gn_poc_name, gn_poc_email,
-       key_priority, offering, start_date, end_date, wbs_provided, wbs_code,
-       estimated_hours, actual_hours, priority, status, notes, last_updated, created_at, updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    args: [
-      id, seq, a.ownerId, a.role ?? null, a.title ?? null, a.client, a.classification,
-      a.gnPocName ?? null, a.gnPocEmail ?? null, a.keyPriority ?? null, a.offering ?? null,
-      a.startDate ?? null, a.endDate ?? null, a.wbsProvided, a.wbsCode ?? null,
-      Math.round(a.estimatedHours), Math.round(a.actualHours), a.priority, a.status,
-      a.notes ?? null, a.lastUpdated ?? now, now, now,
-    ],
-  });
+  check(
+    (
+      await getDb().from("assignments").insert({
+        id,
+        seq,
+        owner_id: a.ownerId,
+        role: a.role ?? null,
+        title: a.title ?? null,
+        client: a.client,
+        classification: a.classification,
+        gn_poc_name: a.gnPocName ?? null,
+        gn_poc_email: a.gnPocEmail ?? null,
+        key_priority: a.keyPriority ?? null,
+        offering: a.offering ?? null,
+        start_date: a.startDate ?? null,
+        end_date: a.endDate ?? null,
+        wbs_provided: a.wbsProvided,
+        wbs_code: a.wbsCode ?? null,
+        estimated_hours: Math.round(a.estimatedHours),
+        actual_hours: Math.round(a.actualHours),
+        priority: a.priority,
+        status: a.status,
+        notes: a.notes ?? null,
+        last_updated: a.lastUpdated ?? now,
+        created_at: now,
+        updated_at: now,
+      })
+    ).error,
+  );
   const created = await getAssignmentById(id);
   if (!created) throw new Error("Failed to create assignment");
   return created;
@@ -265,51 +289,43 @@ const PATCH_COLUMNS: Record<keyof AssignmentPatch, string> = {
 };
 
 export async function updateAssignment(id: string, patch: AssignmentPatch): Promise<Assignment | null> {
-  await ensureSchema();
-  const sets: string[] = [];
-  const args: (string | number | null)[] = [];
+  const row: Row = {};
   for (const key of Object.keys(PATCH_COLUMNS) as (keyof AssignmentPatch)[]) {
     const value = patch[key];
-    if (value !== undefined) {
-      sets.push(`${PATCH_COLUMNS[key]} = ?`);
-      args.push(value as string | number | null);
-    }
+    if (value !== undefined) row[PATCH_COLUMNS[key]] = value;
   }
-  if (patch.lastUpdated === undefined) {
-    sets.push("last_updated = ?");
-    args.push(new Date().toISOString());
-  }
-  sets.push("updated_at = ?");
-  args.push(new Date().toISOString());
-  args.push(id);
-  await getDb().execute({ sql: `UPDATE assignments SET ${sets.join(", ")} WHERE id = ?`, args });
+  if (patch.lastUpdated === undefined) row.last_updated = new Date().toISOString();
+  row.updated_at = new Date().toISOString();
+  check((await getDb().from("assignments").update(row).eq("id", id)).error);
   return getAssignmentById(id);
 }
 
 export async function deleteAssignment(id: string): Promise<void> {
-  await ensureSchema();
-  await getDb().execute({ sql: "DELETE FROM assignments WHERE id = ?", args: [id] });
+  check((await getDb().from("assignments").delete().eq("id", id)).error);
 }
 
 /** Move an assignment to (or out of) the Archived screen. */
 export async function setAssignmentArchived(id: string, archived: boolean): Promise<void> {
-  await ensureSchema();
-  await getDb().execute({
-    sql: "UPDATE assignments SET archived = ?, updated_at = ? WHERE id = ?",
-    args: [archived ? 1 : 0, new Date().toISOString(), id],
-  });
+  check(
+    (
+      await getDb()
+        .from("assignments")
+        .update({ archived, updated_at: new Date().toISOString() })
+        .eq("id", id)
+    ).error,
+  );
 }
 
 /** Wipe everything (used by seed and by leader re-import). */
 export async function clearAll(): Promise<void> {
-  await ensureSchema();
-  await getDb().executeMultiple("DELETE FROM assignments; DELETE FROM users;");
+  await clearAssignments();
+  check((await getDb().from("users").delete().not("id", "is", null)).error);
 }
 
 /** Replace only assignments for a given set of owners (used by scoped import). */
 export async function clearAssignments(): Promise<void> {
-  await ensureSchema();
-  await getDb().execute("DELETE FROM assignments");
+  // PostgREST refuses an unfiltered delete, so match every row explicitly.
+  check((await getDb().from("assignments").delete().not("id", "is", null)).error);
 }
 
 /* ------------------------------ Open Roles -------------------------------- */
@@ -349,64 +365,75 @@ function toOpenRole(r: Row): OpenRole {
 }
 
 export async function listRoles(): Promise<OpenRole[]> {
-  await ensureSchema();
-  const res = await getDb().execute("SELECT * FROM roles ORDER BY title ASC");
-  return res.rows.map(toOpenRole);
+  const rows = unwrap(
+    await getDb().from("roles").select("*").order("title", { ascending: true }),
+  ) as Row[];
+  return rows.map(toOpenRole);
 }
 
-const ROLE_COLS =
-  "id, role_id, title, client, industry, market_unit, country, project, job_family_group, project_role, status, demand_type, priority, location_type, work_location, career_from, career_to, primary_skill, skill_group, language, start_date, end_date, win_probability, primary_contact, primary_contact_email, cn_poc, description, edit_link";
-
 export async function insertRoles(rows: OpenRoleFields[]): Promise<number> {
-  await ensureSchema();
-  const db = getDb();
-  const placeholders = `(${new Array(28).fill("?").join(",")})`;
-  const stmts = rows.map((r) => ({
-    sql: `INSERT INTO roles (${ROLE_COLS}) VALUES ${placeholders}`,
-    args: [
-      randomUUID(), r.roleId, r.title, r.client ?? null, r.industry ?? null, r.marketUnit ?? null,
-      r.country ?? null, r.project ?? null, r.jobFamilyGroup ?? null, r.projectRole ?? null,
-      r.status ?? null, r.demandType ?? null, r.priority ?? null, r.locationType ?? null,
-      r.workLocation ?? null, r.careerFrom ?? null, r.careerTo ?? null, r.primarySkill ?? null,
-      r.skillGroup ?? null, r.language ?? null, r.startDate ?? null, r.endDate ?? null,
-      r.winProbability ?? null, r.primaryContact ?? null, r.primaryContactEmail ?? null,
-      r.cnPoc ?? null, r.description ?? null, r.editLink ?? null,
-    ] as (string | null)[],
+  const payload = rows.map((r) => ({
+    id: randomUUID(),
+    role_id: r.roleId,
+    title: r.title,
+    client: r.client ?? null,
+    industry: r.industry ?? null,
+    market_unit: r.marketUnit ?? null,
+    country: r.country ?? null,
+    project: r.project ?? null,
+    job_family_group: r.jobFamilyGroup ?? null,
+    project_role: r.projectRole ?? null,
+    status: r.status ?? null,
+    demand_type: r.demandType ?? null,
+    priority: r.priority ?? null,
+    location_type: r.locationType ?? null,
+    work_location: r.workLocation ?? null,
+    career_from: r.careerFrom ?? null,
+    career_to: r.careerTo ?? null,
+    primary_skill: r.primarySkill ?? null,
+    skill_group: r.skillGroup ?? null,
+    language: r.language ?? null,
+    start_date: r.startDate ?? null,
+    end_date: r.endDate ?? null,
+    win_probability: r.winProbability ?? null,
+    primary_contact: r.primaryContact ?? null,
+    primary_contact_email: r.primaryContactEmail ?? null,
+    cn_poc: r.cnPoc ?? null,
+    description: r.description ?? null,
+    edit_link: r.editLink ?? null,
   }));
   const CHUNK = 200;
-  for (let i = 0; i < stmts.length; i += CHUNK) {
-    await db.batch(stmts.slice(i, i + CHUNK));
+  for (let i = 0; i < payload.length; i += CHUNK) {
+    check((await getDb().from("roles").insert(payload.slice(i, i + CHUNK))).error);
   }
   return rows.length;
 }
 
+/** Interests cascade from roles. */
 export async function clearRoles(): Promise<void> {
-  await ensureSchema();
-  await getDb().executeMultiple("DELETE FROM role_interests; DELETE FROM roles;");
+  check((await getDb().from("roles").delete().not("id", "is", null)).error);
 }
 
 export async function deleteRole(id: string): Promise<void> {
-  await ensureSchema();
-  await getDb().execute({ sql: "DELETE FROM role_interests WHERE role_id = ?", args: [id] });
-  await getDb().execute({ sql: "DELETE FROM roles WHERE id = ?", args: [id] });
+  check((await getDb().from("roles").delete().eq("id", id)).error);
 }
 
 export async function listInterestedRoleIds(userId: string): Promise<string[]> {
-  await ensureSchema();
-  const res = await getDb().execute({
-    sql: "SELECT role_id FROM role_interests WHERE user_id = ?",
-    args: [userId],
-  });
-  return res.rows.map((r) => String(r.role_id));
+  const rows = unwrap(
+    await getDb().from("role_interests").select("role_id").eq("user_id", userId),
+  ) as Row[];
+  return rows.map((r) => String(r.role_id));
 }
 
 export async function listInterestedRoles(userId: string): Promise<OpenRole[]> {
-  await ensureSchema();
-  const res = await getDb().execute({
-    sql: `SELECT r.* FROM roles r JOIN role_interests i ON i.role_id = r.id WHERE i.user_id = ? ORDER BY i.created_at DESC`,
-    args: [userId],
-  });
-  return res.rows.map(toOpenRole);
+  const rows = unwrap(
+    await getDb()
+      .from("role_interests")
+      .select("created_at, role:roles!inner(*)")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false }),
+  ) as Row[];
+  return rows.map((r) => toOpenRole(r.role as Row));
 }
 
 export interface TeamRoleInterest {
@@ -420,46 +447,45 @@ export interface TeamRoleInterest {
 
 /** Roles that other team members have starred (for the lead's team view). */
 export async function listTeamInterests(excludeUserId: string): Promise<TeamRoleInterest[]> {
-  await ensureSchema();
-  const res = await getDb().execute({
-    sql: `SELECT r.id AS r_id, r.title, r.client, r.market_unit, r.status,
-                 u.id AS u_id, u.name AS u_name, u.accent AS u_accent, u.role AS u_role, i.created_at AS i_at
-          FROM role_interests i
-          JOIN roles r ON r.id = i.role_id
-          JOIN users u ON u.id = i.user_id
-          WHERE i.user_id != ?
-          ORDER BY i.created_at DESC`,
-    args: [excludeUserId],
-  });
+  const rows = unwrap(
+    await getDb()
+      .from("role_interests")
+      .select(
+        "created_at, role:roles!inner(id, title, client, market_unit, status), user:users!inner(id, name, accent, role)",
+      )
+      .neq("user_id", excludeUserId)
+      .order("created_at", { ascending: false }),
+  ) as Row[];
   const map = new Map<string, TeamRoleInterest>();
-  for (const row of res.rows) {
-    const rid = String(row.r_id);
+  for (const row of rows) {
+    const r = row.role as Row;
+    const u = row.user as Row;
+    const rid = String(r.id);
     let g = map.get(rid);
     if (!g) {
-      g = { roleId: rid, title: String(row.title), client: s(row.client), marketUnit: s(row.market_unit), status: s(row.status), users: [] };
+      g = { roleId: rid, title: String(r.title), client: s(r.client), marketUnit: s(r.market_unit), status: s(r.status), users: [] };
       map.set(rid, g);
     }
-    g.users.push({ id: String(row.u_id), name: String(row.u_name), accent: String(row.u_accent), role: String(row.u_role) as Role });
+    g.users.push({ id: String(u.id), name: String(u.name), accent: String(u.accent), role: String(u.role) as Role });
   }
   return [...map.values()];
 }
 
 export async function toggleInterest(userId: string, roleId: string): Promise<{ interested: boolean }> {
-  await ensureSchema();
   const db = getDb();
-  const existing = await db.execute({
-    sql: "SELECT 1 FROM role_interests WHERE user_id = ? AND role_id = ? LIMIT 1",
-    args: [userId, roleId],
-  });
-  if (existing.rows.length > 0) {
-    await db.execute({ sql: "DELETE FROM role_interests WHERE user_id = ? AND role_id = ?", args: [userId, roleId] });
+  const existing = unwrap(
+    await db.from("role_interests").select("role_id").eq("user_id", userId).eq("role_id", roleId).limit(1).maybeSingle(),
+  ) as Row | null;
+  if (existing) {
+    check((await db.from("role_interests").delete().eq("user_id", userId).eq("role_id", roleId)).error);
     return { interested: false };
   }
-  const role = await db.execute({ sql: "SELECT 1 FROM roles WHERE id = ? LIMIT 1", args: [roleId] });
-  if (role.rows.length === 0) throw new Error("Role not found");
-  await db.execute({
-    sql: "INSERT INTO role_interests (user_id, role_id, created_at) VALUES (?, ?, ?)",
-    args: [userId, roleId, new Date().toISOString()],
-  });
+  const role = unwrap(await db.from("roles").select("id").eq("id", roleId).limit(1).maybeSingle()) as Row | null;
+  if (!role) throw new Error("Role not found");
+  check(
+    (
+      await db.from("role_interests").insert({ user_id: userId, role_id: roleId, created_at: new Date().toISOString() })
+    ).error,
+  );
   return { interested: true };
 }
