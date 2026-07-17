@@ -436,6 +436,27 @@ export async function listInterestedRoles(userId: string): Promise<OpenRole[]> {
   return rows.map((r) => toOpenRole(r.role as Row));
 }
 
+/* ------------------------------ Page views -------------------------------- */
+
+export interface PageView {
+  path: string;
+  userId?: string | null;
+  userAgent?: string | null;
+}
+
+/** Record one visit. userId is null for a signed-out visitor. */
+export async function recordPageView(v: PageView): Promise<void> {
+  check(
+    (
+      await getDb().from("page_views").insert({
+        user_id: v.userId ?? null,
+        path: v.path,
+        user_agent: v.userAgent ?? null,
+      })
+    ).error,
+  );
+}
+
 export interface TeamRoleInterest {
   roleId: string;
   title: string;

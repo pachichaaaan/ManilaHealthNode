@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, Inter } from "next/font/google";
+import { PageViewTracker } from "@/components/page-view-tracker";
 import "./globals.css";
 
 const display = Space_Grotesk({
@@ -37,6 +38,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
       </head>
       <body className="min-h-dvh bg-bg font-sans text-ink antialiased">
+        <PageViewTracker />
         {children}
       </body>
     </html>
