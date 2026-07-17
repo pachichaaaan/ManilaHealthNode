@@ -32,6 +32,11 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# .env.production is tracked: it holds only NEXT_PUBLIC_* values, which are
+# compiled into the browser bundle and are public by design. NEVER add
+# SUPABASE_SECRET_KEY or AUTH_SECRET here — this repo is public. Those belong
+# in the host's environment settings only.
+!.env.production
 
 # local database (libSQL / SQLite) — created by `npm run seed`
 /keystone.db
