@@ -173,25 +173,3 @@ export interface OpenRoleFields {
   description: string | null;
   editLink: string | null;
 }
-
-export interface OpenRole extends OpenRoleFields {
-  id: string;
-  createdAt: string;
-}
-
-/** tone for a role priority chip */
-export function priorityTone(priority: string | null): Tone {
-  const p = (priority ?? "").toLowerCase();
-  if (p.includes("critical")) return "rose";
-  if (p.includes("high")) return "amber";
-  return "slate";
-}
-
-/** tone for a role status chip */
-export function roleStatusTone(status: string | null): Tone {
-  const s = (status ?? "").toLowerCase();
-  if (s.includes("new")) return "emerald";
-  if (s.includes("feedback")) return "amber";
-  if (s.includes("process")) return "sky";
-  return "slate";
-}

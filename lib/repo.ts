@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { getDb } from "./db";
-import type { Assignment, Classification, OpenRole, OpenRoleFields, Priority, PublicUser, Role, Status, WbsState } from "./types";
+import type { Assignment, Classification, OpenRoleFields, Priority, PublicUser, Role, Status, WbsState } from "./types";
 
 type Row = Record<string, unknown>;
 
@@ -330,47 +330,6 @@ export async function clearAssignments(): Promise<void> {
 
 /* ------------------------------ Open Roles -------------------------------- */
 
-function toOpenRole(r: Row): OpenRole {
-  return {
-    id: String(r.id),
-    roleId: r.role_id == null ? "" : String(r.role_id),
-    title: String(r.title),
-    client: s(r.client),
-    industry: s(r.industry),
-    marketUnit: s(r.market_unit),
-    country: s(r.country),
-    project: s(r.project),
-    jobFamilyGroup: s(r.job_family_group),
-    projectRole: s(r.project_role),
-    status: s(r.status),
-    demandType: s(r.demand_type),
-    priority: s(r.priority),
-    locationType: s(r.location_type),
-    workLocation: s(r.work_location),
-    careerFrom: s(r.career_from),
-    careerTo: s(r.career_to),
-    primarySkill: s(r.primary_skill),
-    skillGroup: s(r.skill_group),
-    language: s(r.language),
-    startDate: s(r.start_date),
-    endDate: s(r.end_date),
-    winProbability: s(r.win_probability),
-    primaryContact: s(r.primary_contact),
-    primaryContactEmail: s(r.primary_contact_email),
-    cnPoc: s(r.cn_poc),
-    description: s(r.description),
-    editLink: s(r.edit_link),
-    createdAt: String(r.created_at),
-  };
-}
-
-export async function listRoles(): Promise<OpenRole[]> {
-  const rows = unwrap(
-    await getDb().from("roles").select("*").order("title", { ascending: true }),
-  ) as Row[];
-  return rows.map(toOpenRole);
-}
-
 export async function insertRoles(rows: OpenRoleFields[]): Promise<number> {
   const payload = rows.map((r) => ({
     id: randomUUID(),
@@ -414,28 +373,6 @@ export async function clearRoles(): Promise<void> {
   check((await getDb().from("roles").delete().not("id", "is", null)).error);
 }
 
-export async function deleteRole(id: string): Promise<void> {
-  check((await getDb().from("roles").delete().eq("id", id)).error);
-}
-
-export async function listInterestedRoleIds(userId: string): Promise<string[]> {
-  const rows = unwrap(
-    await getDb().from("role_interests").select("role_id").eq("user_id", userId),
-  ) as Row[];
-  return rows.map((r) => String(r.role_id));
-}
-
-export async function listInterestedRoles(userId: string): Promise<OpenRole[]> {
-  const rows = unwrap(
-    await getDb()
-      .from("role_interests")
-      .select("created_at, role:roles!inner(*)")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false }),
-  ) as Row[];
-  return rows.map((r) => toOpenRole(r.role as Row));
-}
-
 /* ------------------------------ Page views -------------------------------- */
 
 export interface PageView {
@@ -455,58 +392,4 @@ export async function recordPageView(v: PageView): Promise<void> {
       })
     ).error,
   );
-}
-
-export interface TeamRoleInterest {
-  roleId: string;
-  title: string;
-  client: string | null;
-  marketUnit: string | null;
-  status: string | null;
-  users: { id: string; name: string; accent: string; role: Role }[];
-}
-
-/** Roles that other team members have starred (for the lead's team view). */
-export async function listTeamInterests(excludeUserId: string): Promise<TeamRoleInterest[]> {
-  const rows = unwrap(
-    await getDb()
-      .from("role_interests")
-      .select(
-        "created_at, role:roles!inner(id, title, client, market_unit, status), user:users!inner(id, name, accent, role)",
-      )
-      .neq("user_id", excludeUserId)
-      .order("created_at", { ascending: false }),
-  ) as Row[];
-  const map = new Map<string, TeamRoleInterest>();
-  for (const row of rows) {
-    const r = row.role as Row;
-    const u = row.user as Row;
-    const rid = String(r.id);
-    let g = map.get(rid);
-    if (!g) {
-      g = { roleId: rid, title: String(r.title), client: s(r.client), marketUnit: s(r.market_unit), status: s(r.status), users: [] };
-      map.set(rid, g);
-    }
-    g.users.push({ id: String(u.id), name: String(u.name), accent: String(u.accent), role: String(u.role) as Role });
-  }
-  return [...map.values()];
-}
-
-export async function toggleInterest(userId: string, roleId: string): Promise<{ interested: boolean }> {
-  const db = getDb();
-  const existing = unwrap(
-    await db.from("role_interests").select("role_id").eq("user_id", userId).eq("role_id", roleId).limit(1).maybeSingle(),
-  ) as Row | null;
-  if (existing) {
-    check((await db.from("role_interests").delete().eq("user_id", userId).eq("role_id", roleId)).error);
-    return { interested: false };
-  }
-  const role = unwrap(await db.from("roles").select("id").eq("id", roleId).limit(1).maybeSingle()) as Row | null;
-  if (!role) throw new Error("Role not found");
-  check(
-    (
-      await db.from("role_interests").insert({ user_id: userId, role_id: roleId, created_at: new Date().toISOString() })
-    ).error,
-  );
-  return { interested: true };
 }
