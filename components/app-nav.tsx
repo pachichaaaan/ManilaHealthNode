@@ -10,13 +10,13 @@ import type { Role } from "@/lib/types";
 type NavItem = { href: string; label: string; icon: LucideIcon; leadOnly?: boolean };
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/assignments", label: "Assignments", icon: ClipboardList },
-  { href: "/plus-one", label: "Plus 1", icon: Star },
-  { href: "/wbs", label: "WBS", icon: FileCheck2 },
-  { href: "/archived", label: "Archived", icon: Archive },
-  { href: "/health-skills", label: "Skills", icon: GraduationCap },
-  { href: "/team", label: "Team", icon: Users, leadOnly: true },
+  { href: "/dashboard",    label: "Dashboard",   icon: LayoutDashboard },
+  { href: "/assignments",  label: "Assignments", icon: ClipboardList },
+  { href: "/plus-one",     label: "Plus 1",      icon: Star },
+  { href: "/wbs",          label: "WBS",         icon: FileCheck2 },
+  { href: "/team",         label: "Team",        icon: Users, leadOnly: true },
+  { href: "/health-skills",label: "Skills",      icon: GraduationCap },
+  { href: "/archived",     label: "Archived",    icon: Archive },
 ];
 
 function itemsFor(role: Role) {
