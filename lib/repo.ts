@@ -417,7 +417,7 @@ export interface SkillEntryInput {
   internalAssignment?: string | null;
 }
 
-export async function upsertSkillEntry(input: SkillEntryInput): Promise<SkillEntry> {
+export async function upsertSkillEntry(input: SkillEntryInput): Promise<{ entry: SkillEntry; action: "created" | "updated" }> {
   const now = new Date().toISOString();
   const payload = {
     name: input.name,
@@ -437,7 +437,7 @@ export async function upsertSkillEntry(input: SkillEntryInput): Promise<SkillEnt
     const updated = unwrap(
       await getDb().from("skill_entries").select("*").eq("id", String(existing.id)).single(),
     ) as Row;
-    return toSkillEntry(updated);
+    return { entry: toSkillEntry(updated), action: "updated" };
   } else {
     const { randomUUID } = await import("node:crypto");
     const id = randomUUID();
@@ -447,7 +447,7 @@ export async function upsertSkillEntry(input: SkillEntryInput): Promise<SkillEnt
     const created = unwrap(
       await getDb().from("skill_entries").select("*").eq("id", id).single(),
     ) as Row;
-    return toSkillEntry(created);
+    return { entry: toSkillEntry(created), action: "created" };
   }
 }
 

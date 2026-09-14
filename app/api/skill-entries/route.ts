@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { listSkillEntries, upsertSkillEntry } from "@/lib/repo";
 import { skillEntrySchema } from "@/lib/validation";
+import { sendSkillChangeNotification } from "@/lib/email";
 
 export async function GET() {
   const session = await getSession();
@@ -20,6 +21,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   }
 
-  const entry = await upsertSkillEntry(parsed.data);
+  const { entry, action } = await upsertSkillEntry(parsed.data);
+
+  // Fire email notification — non-blocking, never fails the request
+  sendSkillChangeNotification({
+    submittedBy: session.name,
+    memberName: entry.name,
+    action,
+    segment: entry.segment,
+    level: entry.level,
+    functionalSkills: entry.functionalSkills,
+    businessSkills: entry.businessSkills,
+    internalAssignment: entry.internalAssignment,
+  });
+
   return NextResponse.json(entry);
 }
