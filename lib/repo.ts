@@ -373,6 +373,84 @@ export async function clearRoles(): Promise<void> {
   check((await getDb().from("roles").delete().not("id", "is", null)).error);
 }
 
+/* ----------------------------- Skill entries ------------------------------ */
+
+export interface SkillEntry {
+  id: string;
+  name: string;
+  segment: string;
+  level: string;
+  functionalSkills: string[];
+  businessSkills: string[];
+  internalAssignment: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function toSkillEntry(r: Row): SkillEntry {
+  return {
+    id: String(r.id),
+    name: String(r.name),
+    segment: String(r.segment),
+    level: String(r.level),
+    functionalSkills: Array.isArray(r.functional_skills) ? (r.functional_skills as string[]) : [],
+    businessSkills: Array.isArray(r.business_skills) ? (r.business_skills as string[]) : [],
+    internalAssignment: s(r.internal_assignment),
+    createdAt: String(r.created_at),
+    updatedAt: String(r.updated_at),
+  };
+}
+
+export async function listSkillEntries(): Promise<SkillEntry[]> {
+  const rows = unwrap(
+    await getDb().from("skill_entries").select("*").order("name", { ascending: true }),
+  ) as Row[];
+  return rows.map(toSkillEntry);
+}
+
+export interface SkillEntryInput {
+  name: string;
+  segment: string;
+  level: string;
+  functionalSkills: string[];
+  businessSkills: string[];
+  internalAssignment?: string | null;
+}
+
+export async function upsertSkillEntry(input: SkillEntryInput): Promise<SkillEntry> {
+  const now = new Date().toISOString();
+  const payload = {
+    name: input.name,
+    segment: input.segment,
+    level: input.level,
+    functional_skills: input.functionalSkills.filter(Boolean),
+    business_skills: input.businessSkills.filter(Boolean),
+    internal_assignment: input.internalAssignment ?? null,
+    updated_at: now,
+  };
+  const existing = unwrap(
+    await getDb().from("skill_entries").select("id").eq("name", input.name).maybeSingle(),
+  ) as Row | null;
+
+  if (existing) {
+    check((await getDb().from("skill_entries").update(payload).eq("id", String(existing.id))).error);
+    const updated = unwrap(
+      await getDb().from("skill_entries").select("*").eq("id", String(existing.id)).single(),
+    ) as Row;
+    return toSkillEntry(updated);
+  } else {
+    const { randomUUID } = await import("node:crypto");
+    const id = randomUUID();
+    check(
+      (await getDb().from("skill_entries").insert({ id, ...payload, created_at: now })).error,
+    );
+    const created = unwrap(
+      await getDb().from("skill_entries").select("*").eq("id", id).single(),
+    ) as Row;
+    return toSkillEntry(created);
+  }
+}
+
 /* ------------------------------ Page views -------------------------------- */
 
 export interface PageView {

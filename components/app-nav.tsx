@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Archive, ClipboardList, FileCheck2, LayoutDashboard, Star, Users, type LucideIcon } from "lucide-react";
+import { Archive, ClipboardList, FileCheck2, GraduationCap, LayoutDashboard, Star, Users, type LucideIcon } from "lucide-react";
 import { Logo } from "./logo";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/lib/types";
@@ -15,6 +15,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/plus-one", label: "Plus 1", icon: Star },
   { href: "/wbs", label: "WBS", icon: FileCheck2 },
   { href: "/archived", label: "Archived", icon: Archive },
+  { href: "/health-skills", label: "Skills", icon: GraduationCap },
   { href: "/team", label: "Team", icon: Users, leadOnly: true },
 ];
 

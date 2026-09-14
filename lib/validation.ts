@@ -68,3 +68,16 @@ export const assignmentUpdateSchema = assignmentCreateSchema.partial();
 
 export type AssignmentCreateInput = z.infer<typeof assignmentCreateSchema>;
 export type AssignmentUpdateInput = z.infer<typeof assignmentUpdateSchema>;
+
+/* ------------------------------ Skill entries ----------------------------- */
+
+export const skillEntrySchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(120),
+  segment: z.string().trim().min(1, "Segment is required").max(120),
+  level: z.string().trim().min(1, "Level is required").max(80),
+  functionalSkills: z.array(z.string().trim().max(200)).max(6).default([]),
+  businessSkills: z.array(z.string().trim().max(200)).max(4).default([]),
+  internalAssignment: z.string().trim().max(300).optional().nullable(),
+});
+
+export type SkillEntryInput = z.infer<typeof skillEntrySchema>;
