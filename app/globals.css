@@ -347,6 +347,26 @@ body {
   );
 }
 
+/* ------------------- Roster row :target highlight ------------------- */
+
+@keyframes roster-flash {
+  0%   {
+    background-color: color-mix(in srgb, var(--gold) 22%, transparent);
+    outline-color:    color-mix(in srgb, var(--gold) 55%, transparent);
+  }
+  100% {
+    background-color: color-mix(in srgb, var(--gold) 8%, transparent);
+    outline-color:    color-mix(in srgb, var(--gold) 22%, transparent);
+  }
+}
+
+[id^="roster-"]:target {
+  animation: roster-flash 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  background-color: color-mix(in srgb, var(--gold) 8%, transparent);
+  outline: 1.5px solid color-mix(in srgb, var(--gold) 22%, transparent);
+  border-radius: 0.75rem;
+}
+
 /* Respect reduced-motion globally: neutralise animation + transition. */
 @media (prefers-reduced-motion: reduce) {
   *,

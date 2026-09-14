@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Activity, AlertTriangle, ArrowUpRight, Clock, Plus, Star } from "lucide-react";
+import { Activity, AlertTriangle, ArrowUpRight, Clock, GraduationCap, Plus, Star } from "lucide-react";
 import { getSession } from "@/lib/auth";
-import { listAssignments } from "@/lib/repo";
+import { listAssignments, listSkillEntries } from "@/lib/repo";
 import { computeAnalytics } from "@/lib/analytics";
 import { CLASSIFICATION_META, WBS_META, WBS_STATES } from "@/lib/types";
+import { GAP_ANALYSIS, MATRIX_SKILLS, buildDynamicMatrix, getNamesForSkill, assessCoverage } from "@/lib/skills-matrix";
 import { Card, CardTitle } from "@/components/card";
 import { StatCard } from "@/components/stat-card";
 import { HoursArc } from "@/components/hours-arc";
@@ -22,11 +23,24 @@ export default async function DashboardPage() {
   if (!session) redirect("/login");
 
   const isLead = session.role === "lead";
-  const assignments = await listAssignments(isLead ? undefined : session.id);
+  const [assignments, dbSkillEntries] = await Promise.all([
+    listAssignments(isLead ? undefined : session.id),
+    listSkillEntries().catch(() => []),
+  ]);
   const a = computeAnalytics(assignments);
   const firstName = session.name.split(" ")[0];
   const today = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const barItems = [...assignments].sort((x, y) => y.estimatedHours - x.estimatedHours).slice(0, 8);
+
+  // Skills snapshot
+  const skillMatrix = buildDynamicMatrix(dbSkillEntries);
+  const gapSummary = GAP_ANALYSIS.map((g) => {
+    const { direct, adjacent } = getNamesForSkill(g.matrixKey, skillMatrix);
+    return { ...g, assessment: assessCoverage(direct.length, adjacent.length), directCount: direct.length, adjacentCount: adjacent.length };
+  });
+  const skillGaps    = gapSummary.filter((g) => g.assessment === "GAP");
+  const skillStrong  = gapSummary.filter((g) => g.assessment === "Strong").length;
+  const submittedCount = dbSkillEntries.length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -143,6 +157,83 @@ export default async function DashboardPage() {
           </div>
         </Card>
       )}
+
+      {/* Skills snapshot */}
+      <Card className="animate-fade-up" style={{ animationDelay: "500ms" }}>
+        <CardTitle
+          title="Skills Snapshot"
+          subtitle={`${MATRIX_SKILLS.length} skills tracked · ${submittedCount} entries submitted · ${skillStrong} strong bench`}
+          action={
+            <Link href="/health-skills" className="inline-flex items-center gap-1 text-sm font-medium text-gold-text hover:underline">
+              Full alignment <ArrowUpRight size={15} />
+            </Link>
+          }
+        />
+        <div className="grid gap-4 sm:grid-cols-2">
+          {/* Coverage bar */}
+          <div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Coverage by category</p>
+            <div className="flex flex-col gap-2">
+              {(["Domain", "Analytics", "Consulting", "Leadership"] as const).map((cat) => {
+                const catSkills = gapSummary.filter((g) => g.category === cat);
+                const strong  = catSkills.filter((g) => g.assessment === "Strong").length;
+                const adequate= catSkills.filter((g) => g.assessment === "Adequate").length;
+                const thin    = catSkills.filter((g) => g.assessment === "Thin").length;
+                const gap     = catSkills.filter((g) => g.assessment === "GAP").length;
+                const total   = catSkills.length;
+                return (
+                  <div key={cat} className="flex items-center gap-3">
+                    <span className="w-24 shrink-0 text-xs text-ink-soft">{cat}</span>
+                    <div className="flex h-2 flex-1 overflow-hidden rounded-full">
+                      {strong   > 0 && <div style={{ flex: strong }}   className="bg-emerald-500" title={`Strong: ${strong}`} />}
+                      {adequate > 0 && <div style={{ flex: adequate }} className="bg-sky-500"     title={`Adequate: ${adequate}`} />}
+                      {thin     > 0 && <div style={{ flex: thin }}     className="bg-amber-400"   title={`Thin: ${thin}`} />}
+                      {gap      > 0 && <div style={{ flex: gap }}      className="bg-rose-500"    title={`GAP: ${gap}`} />}
+                    </div>
+                    <span className="w-16 shrink-0 text-right text-[11px] text-ink-faint">{strong + adequate}/{total} covered</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-ink-faint">
+              {[["bg-emerald-500","Strong"],["bg-sky-500","Adequate"],["bg-amber-400","Thin"],["bg-rose-500","GAP"]].map(([cls, lbl]) => (
+                <span key={lbl} className="flex items-center gap-1"><span className={`h-2 w-2 rounded-full ${cls}`} />{lbl}</span>
+              ))}
+            </div>
+          </div>
+
+          {/* Top gaps */}
+          <div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
+              {skillGaps.length > 0 ? `${skillGaps.length} skill gap${skillGaps.length !== 1 ? "s" : ""} — no direct coverage` : "No skill gaps — great bench strength!"}
+            </p>
+            {skillGaps.length === 0 ? (
+              <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2.5 text-sm text-emerald-600 dark:text-emerald-400">
+                <GraduationCap size={15} />
+                All tracked skills have at least one direct expert.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                {skillGaps.slice(0, 5).map((g) => (
+                  <Link
+                    key={g.skill}
+                    href={`/health-skills#gap-${g.matrixKey}`}
+                    className="flex items-center justify-between rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-sm hover:bg-rose-500/10 transition-colors"
+                  >
+                    <span className="font-medium text-rose-600 dark:text-rose-400">{g.skill}</span>
+                    <span className="text-[11px] text-ink-faint">{g.category}</span>
+                  </Link>
+                ))}
+                {skillGaps.length > 5 && (
+                  <Link href="/health-skills" className="text-[11px] text-gold-text hover:underline">
+                    +{skillGaps.length - 5} more gaps — view full analysis
+                  </Link>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </Card>
 
       {/* plus 1 watch */}
       {a.plusOnes.length > 0 && (
