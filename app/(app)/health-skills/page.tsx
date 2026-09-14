@@ -5,6 +5,7 @@ import type { SkillEntry } from "@/lib/repo";
 import { SEED_TEAM, MATRIX_SKILLS, GAP_ANALYSIS, buildDynamicMatrix, getNamesForSkill, assessCoverage } from "@/lib/skills-matrix";
 import { Card, CardTitle } from "@/components/card";
 import { HealthSkillsClient } from "./client";
+import { RemovableSkillTag } from "@/components/removable-skill-tag";
 
 export const dynamic = "force-dynamic";
 
@@ -189,35 +190,46 @@ export default async function HealthSkillsPage() {
           subtitle={`Functional and business skills by member · sorted by level`}
         />
         <div className="flex flex-col divide-y divide-border">
-          {team.map((member) => (
-            <div key={member.name} id={memberId(member.name)} style={{ scrollMarginTop: "5rem" }} className="flex flex-col gap-2 py-4 -mx-2 px-2 first:pt-0 last:pb-0 sm:flex-row sm:gap-4">
-              <div className="shrink-0 sm:w-48">
-                <p className="text-sm font-semibold text-ink">{member.name}</p>
-                <p className="text-xs text-ink-soft">{member.level} · {member.segment ?? "Industry Consulting"}</p>
-                {member.internalAssignment && (
-                  <p className="mt-1 text-[11px] italic text-gold-text">{member.internalAssignment}</p>
-                )}
-              </div>
-              <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <div>
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Functional</p>
-                  <div className="flex flex-wrap gap-1">
-                    {member.functionalSkills.map((s) => (
-                      <span key={s} className="rounded-md bg-surface-2 px-2 py-0.5 text-[11px] text-ink-soft border border-border">{s}</span>
-                    ))}
+          {team.map((member) => {
+            const isDbEntry = dbEntries.some((e) => e.name.toLowerCase() === member.name.toLowerCase());
+            return (
+              <div key={member.name} id={memberId(member.name)} style={{ scrollMarginTop: "5rem" }} className="flex flex-col gap-2 py-4 -mx-2 px-2 first:pt-0 last:pb-0 sm:flex-row sm:gap-4">
+                <div className="shrink-0 sm:w-48">
+                  <p className="text-sm font-semibold text-ink">{member.name}</p>
+                  <p className="text-xs text-ink-soft">{member.level} · {member.segment ?? "Industry Consulting"}</p>
+                  {member.internalAssignment && (
+                    <p className="mt-1 text-[11px] italic text-gold-text">{member.internalAssignment}</p>
+                  )}
+                </div>
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                  <div>
+                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Functional</p>
+                    <div className="flex flex-wrap gap-1">
+                      {member.functionalSkills.map((s) =>
+                        isDbEntry ? (
+                          <RemovableSkillTag key={s} memberName={member.name} skill={s} skillType="functional" />
+                        ) : (
+                          <span key={s} className="rounded-md bg-surface-2 px-2 py-0.5 text-[11px] text-ink-soft border border-border">{s}</span>
+                        )
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Business</p>
+                    <div className="flex flex-wrap gap-1">
+                      {member.businessSkills.map((s) =>
+                        isDbEntry ? (
+                          <RemovableSkillTag key={s} memberName={member.name} skill={s} skillType="business" />
+                        ) : (
+                          <span key={s} className="rounded-md bg-gold/10 px-2 py-0.5 text-[11px] text-gold-text border border-gold/20">{s}</span>
+                        )
+                      )}
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">Business</p>
-                  <div className="flex flex-wrap gap-1">
-                    {member.businessSkills.map((s) => (
-                      <span key={s} className="rounded-md bg-gold/10 px-2 py-0.5 text-[11px] text-gold-text border border-gold/20">{s}</span>
-                    ))}
-                  </div>
-                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Card>
     </div>

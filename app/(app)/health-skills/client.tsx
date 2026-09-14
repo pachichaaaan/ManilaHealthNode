@@ -7,3 +7,8 @@ export function HealthSkillsClient() {
   const router = useRouter();
   return <SkillEntryForm onSuccess={() => router.refresh()} />;
 }
+
+export function useRefresh() {
+  const router = useRouter();
+  return () => router.refresh();
+}

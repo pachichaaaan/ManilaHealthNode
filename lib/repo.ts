@@ -456,6 +456,25 @@ export async function upsertSkillEntry(input: SkillEntryInput): Promise<{ entry:
   }
 }
 
+export async function removeSkillFromEntry(
+  name: string,
+  skillType: "functional" | "business",
+  skill: string,
+): Promise<void> {
+  const row = unwrap(
+    await getDb().from("skill_entries").select("*").eq("name", name).single(),
+  ) as Row;
+  const field = skillType === "functional" ? "functional_skills" : "business_skills";
+  const current = row[field] as string[];
+  const updated = current.filter((s) => s !== skill);
+  check(
+    (await getDb()
+      .from("skill_entries")
+      .update({ [field]: updated, updated_at: new Date().toISOString() })
+      .eq("id", String(row.id))).error,
+  );
+}
+
 /* ------------------------------ Page views -------------------------------- */
 
 export interface PageView {

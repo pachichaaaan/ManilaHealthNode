@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { listSkillEntries, upsertSkillEntry } from "@/lib/repo";
+import { listSkillEntries, upsertSkillEntry, removeSkillFromEntry } from "@/lib/repo";
 import { skillEntrySchema } from "@/lib/validation";
 import { sendSkillChangeNotification } from "@/lib/email";
 
@@ -44,4 +44,22 @@ export async function POST(req: Request) {
   });
 
   return NextResponse.json(entry);
+}
+
+export async function PATCH(req: Request) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = await req.json().catch(() => null);
+  const { name, skillType, skill } = body ?? {};
+  if (
+    typeof name !== "string" || !name.trim() ||
+    (skillType !== "functional" && skillType !== "business") ||
+    typeof skill !== "string" || !skill.trim()
+  ) {
+    return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+  }
+
+  await removeSkillFromEntry(name.trim(), skillType, skill.trim());
+  return NextResponse.json({ ok: true });
 }
