@@ -21,18 +21,26 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   }
 
-  const { entry, action } = await upsertSkillEntry(parsed.data);
+  const { entry, previous, action } = await upsertSkillEntry(parsed.data);
 
   // Fire email notification — non-blocking, never fails the request
   sendSkillChangeNotification({
     submittedBy: session.name,
     memberName: entry.name,
     action,
+    submittedAt: entry.updatedAt,
     segment: entry.segment,
     level: entry.level,
     functionalSkills: entry.functionalSkills,
     businessSkills: entry.businessSkills,
     internalAssignment: entry.internalAssignment,
+    previous: previous ? {
+      segment: previous.segment,
+      level: previous.level,
+      functionalSkills: previous.functionalSkills,
+      businessSkills: previous.businessSkills,
+      internalAssignment: previous.internalAssignment,
+    } : null,
   });
 
   return NextResponse.json(entry);

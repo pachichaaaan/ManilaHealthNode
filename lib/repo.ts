@@ -417,7 +417,7 @@ export interface SkillEntryInput {
   internalAssignment?: string | null;
 }
 
-export async function upsertSkillEntry(input: SkillEntryInput): Promise<{ entry: SkillEntry; action: "created" | "updated" }> {
+export async function upsertSkillEntry(input: SkillEntryInput): Promise<{ entry: SkillEntry; previous: SkillEntry | null; action: "created" | "updated" }> {
   const now = new Date().toISOString();
   const payload = {
     name: input.name,
@@ -428,16 +428,17 @@ export async function upsertSkillEntry(input: SkillEntryInput): Promise<{ entry:
     internal_assignment: input.internalAssignment ?? null,
     updated_at: now,
   };
-  const existing = unwrap(
-    await getDb().from("skill_entries").select("id").eq("name", input.name).maybeSingle(),
+  const existingRow = unwrap(
+    await getDb().from("skill_entries").select("*").eq("name", input.name).maybeSingle(),
   ) as Row | null;
 
-  if (existing) {
-    check((await getDb().from("skill_entries").update(payload).eq("id", String(existing.id))).error);
+  if (existingRow) {
+    const previous = toSkillEntry(existingRow);
+    check((await getDb().from("skill_entries").update(payload).eq("id", String(existingRow.id))).error);
     const updated = unwrap(
-      await getDb().from("skill_entries").select("*").eq("id", String(existing.id)).single(),
+      await getDb().from("skill_entries").select("*").eq("id", String(existingRow.id)).single(),
     ) as Row;
-    return { entry: toSkillEntry(updated), action: "updated" };
+    return { entry: toSkillEntry(updated), previous, action: "updated" };
   } else {
     const { randomUUID } = await import("node:crypto");
     const id = randomUUID();
@@ -447,7 +448,7 @@ export async function upsertSkillEntry(input: SkillEntryInput): Promise<{ entry:
     const created = unwrap(
       await getDb().from("skill_entries").select("*").eq("id", id).single(),
     ) as Row;
-    return { entry: toSkillEntry(created), action: "created" };
+    return { entry: toSkillEntry(created), previous: null, action: "created" };
   }
 }
 
