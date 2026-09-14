@@ -1,6 +1,10 @@
 import { Resend } from "resend";
 
-const LEAD_EMAIL = "Patricia.e.mamaril@accenture.com";
+const LEAD_EMAILS = [
+  "Patricia.e.mamaril@accenture.com",
+  "aristotle.castro@accenture.com",
+  "kacelyn.palma@accenture.com",
+];
 const FROM_EMAIL = "ManilaHealthNode <notifications@manilahealthnode.fun>";
 
 let _resend: Resend | null = null;
@@ -295,7 +299,7 @@ export async function sendSkillChangeNotification(payload: SkillChangePayload) {
 
   await resend.emails.send({
     from: FROM_EMAIL,
-    to: LEAD_EMAIL,
+    to: LEAD_EMAILS,
     subject,
     html,
   }).catch((err) => {
