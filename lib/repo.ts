@@ -434,7 +434,11 @@ export async function upsertSkillEntry(input: SkillEntryInput): Promise<{ entry:
 
   if (existingRow) {
     const previous = toSkillEntry(existingRow);
-    check((await getDb().from("skill_entries").update(payload).eq("id", String(existingRow.id))).error);
+    // Merge: union of old + new skills — existing skills are never removed
+    const mergedFn  = [...new Set([...(existingRow.functional_skills as string[]), ...payload.functional_skills])];
+    const mergedBiz = [...new Set([...(existingRow.business_skills  as string[]), ...payload.business_skills])];
+    const mergedPayload = { ...payload, functional_skills: mergedFn, business_skills: mergedBiz };
+    check((await getDb().from("skill_entries").update(mergedPayload).eq("id", String(existingRow.id))).error);
     const updated = unwrap(
       await getDb().from("skill_entries").select("*").eq("id", String(existingRow.id)).single(),
     ) as Row;

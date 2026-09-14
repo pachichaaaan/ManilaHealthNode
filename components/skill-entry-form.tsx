@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition, useEffect, useCallback } from "react";
-import { X, Plus, Loader2 } from "lucide-react";
+import { X, Plus, Loader2, Lock } from "lucide-react";
 
 const KNOWN_NAMES = [
   "Adrianne Tan-gatue",
@@ -63,42 +63,54 @@ const BUSINESS_SKILLS = [
   "Value Realization", "Vendor Assessment", "Workforce Planning", "Workshop Facilitation",
 ];
 
-interface FormState {
+interface ExistingEntry {
   name: string;
   segment: string;
   level: string;
   functionalSkills: string[];
   businessSkills: string[];
+  internalAssignment: string | null;
+}
+
+interface FormState {
+  name: string;
+  segment: string;
+  level: string;
+  newFunctionalSkills: string[];   // slots for NEW additions only
+  newBusinessSkills: string[];     // slots for NEW additions only
   internalAssignment: string;
 }
 
-const empty: FormState = {
+const emptyForm = (): FormState => ({
   name: "",
   segment: "Industry Consulting",
   level: "Consultant",
-  functionalSkills: ["", "", "", "", "", ""],
-  businessSkills: ["", "", "", ""],
+  newFunctionalSkills: ["", "", "", "", "", ""],
+  newBusinessSkills: ["", "", "", ""],
   internalAssignment: "",
-};
+});
 
 function NameAutocomplete({
   value,
   onChange,
+  onSelect,
 }: {
   value: string;
   onChange: (v: string) => void;
+  onSelect: (name: string, entries: ExistingEntry[]) => void;
 }) {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [allEntries, setAllEntries] = useState<ExistingEntry[]>([]);
   const [allNames, setAllNames] = useState<string[]>(KNOWN_NAMES);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // Fetch any extra submitted names from the DB on mount
   useEffect(() => {
     fetch("/api/skill-entries")
       .then((r) => r.json())
-      .then((entries: { name: string }[]) => {
+      .then((entries: ExistingEntry[]) => {
         if (!Array.isArray(entries)) return;
+        setAllEntries(entries);
         const extra = entries.map((e) => e.name).filter(
           (n) => !KNOWN_NAMES.some((k) => k.toLowerCase() === n.toLowerCase()),
         );
@@ -107,7 +119,6 @@ function NameAutocomplete({
       .catch(() => {});
   }, []);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     function handle(e: MouseEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
@@ -124,13 +135,9 @@ function NameAutocomplete({
       const v = e.target.value;
       onChange(v);
       setActiveIndex(-1);
-      if (v.trim().length === 0) {
-        setSuggestions([]);
-        return;
-      }
+      if (v.trim().length === 0) { setSuggestions([]); return; }
       const lower = v.trim().toLowerCase();
-      const matches = allNames.filter((n) => n.toLowerCase().startsWith(lower));
-      setSuggestions(matches);
+      setSuggestions(allNames.filter((n) => n.toLowerCase().startsWith(lower)));
     },
     [allNames, onChange],
   );
@@ -139,23 +146,15 @@ function NameAutocomplete({
     onChange(name);
     setSuggestions([]);
     setActiveIndex(-1);
+    onSelect(name, allEntries);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (suggestions.length === 0) return;
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setActiveIndex((i) => Math.min(i + 1, suggestions.length - 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setActiveIndex((i) => Math.max(i - 1, -1));
-    } else if (e.key === "Enter" && activeIndex >= 0) {
-      e.preventDefault();
-      select(suggestions[activeIndex]);
-    } else if (e.key === "Escape") {
-      setSuggestions([]);
-      setActiveIndex(-1);
-    }
+    if (e.key === "ArrowDown") { e.preventDefault(); setActiveIndex((i) => Math.min(i + 1, suggestions.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setActiveIndex((i) => Math.max(i - 1, -1)); }
+    else if (e.key === "Enter" && activeIndex >= 0) { e.preventDefault(); select(suggestions[activeIndex]); }
+    else if (e.key === "Escape") { setSuggestions([]); setActiveIndex(-1); }
   }
 
   return (
@@ -178,9 +177,7 @@ function NameAutocomplete({
                 type="button"
                 onMouseDown={(e) => { e.preventDefault(); select(name); }}
                 className={`w-full px-3 py-2 text-left text-sm transition-colors ${
-                  i === activeIndex
-                    ? "bg-gold/15 text-ink"
-                    : "text-ink-soft hover:bg-surface-2"
+                  i === activeIndex ? "bg-gold/15 text-ink" : "text-ink-soft hover:bg-surface-2"
                 }`}
               >
                 {name}
@@ -195,13 +192,15 @@ function NameAutocomplete({
 
 export function SkillEntryForm({ onSuccess }: { onSuccess: () => void }) {
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<FormState>(empty);
+  const [form, setForm] = useState<FormState>(emptyForm());
+  const [existing, setExisting] = useState<ExistingEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   function openDialog() {
-    setForm(empty);
+    setForm(emptyForm());
+    setExisting(null);
     setError(null);
     setOpen(true);
     dialogRef.current?.showModal();
@@ -212,26 +211,50 @@ export function SkillEntryForm({ onSuccess }: { onSuccess: () => void }) {
     setOpen(false);
   }
 
+  function handleNameSelect(name: string, entries: ExistingEntry[]) {
+    const found = entries.find((e) => e.name.toLowerCase() === name.toLowerCase());
+    if (found) {
+      setExisting(found);
+      setForm((f) => ({
+        ...f,
+        name,
+        segment: found.segment,
+        level: found.level,
+        internalAssignment: found.internalAssignment ?? "",
+        newFunctionalSkills: ["", "", "", "", "", ""],
+        newBusinessSkills: ["", "", "", ""],
+      }));
+    } else {
+      setExisting(null);
+      setForm((f) => ({ ...f, name }));
+    }
+  }
+
   function setFunctional(i: number, val: string) {
-    const next = [...form.functionalSkills];
+    const next = [...form.newFunctionalSkills];
     next[i] = val;
-    setForm((f) => ({ ...f, functionalSkills: next }));
+    setForm((f) => ({ ...f, newFunctionalSkills: next }));
   }
 
   function setBusiness(i: number, val: string) {
-    const next = [...form.businessSkills];
+    const next = [...form.newBusinessSkills];
     next[i] = val;
-    setForm((f) => ({ ...f, businessSkills: next }));
+    setForm((f) => ({ ...f, newBusinessSkills: next }));
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const functionalSkills = form.functionalSkills.filter((s) => s.trim());
-    const businessSkills = form.businessSkills.filter((s) => s.trim());
 
+    // Combine existing retained skills + new additions (backend also merges, this is just for display)
+    const existingFn  = existing?.functionalSkills ?? [];
+    const existingBiz = existing?.businessSkills   ?? [];
+    const newFn  = form.newFunctionalSkills.filter((s) => s.trim() && !existingFn.includes(s.trim()));
+    const newBiz = form.newBusinessSkills.filter((s)   => s.trim() && !existingBiz.includes(s.trim()));
+
+    // Must have at least one functional skill total
     if (!form.name.trim()) { setError("Name is required."); return; }
-    if (functionalSkills.length === 0) { setError("At least one functional skill is required."); return; }
+    if (existingFn.length + newFn.length === 0) { setError("At least one functional skill is required."); return; }
 
     startTransition(async () => {
       try {
@@ -242,8 +265,9 @@ export function SkillEntryForm({ onSuccess }: { onSuccess: () => void }) {
             name: form.name.trim(),
             segment: form.segment,
             level: form.level,
-            functionalSkills,
-            businessSkills,
+            // Send only NEW skills — backend will merge with existing
+            functionalSkills: newFn,
+            businessSkills: newBiz,
             internalAssignment: form.internalAssignment.trim() || null,
           }),
         });
@@ -259,6 +283,8 @@ export function SkillEntryForm({ onSuccess }: { onSuccess: () => void }) {
       }
     });
   }
+
+  const isUpdate = existing != null;
 
   return (
     <>
@@ -281,13 +307,11 @@ export function SkillEntryForm({ onSuccess }: { onSuccess: () => void }) {
             <div className="flex items-center justify-between border-b border-border px-6 py-4">
               <div>
                 <h2 className="font-display text-base font-semibold text-ink">GN Health Skills Entry Form</h2>
-                <p className="text-xs text-ink-faint">Fill in all required fields and submit</p>
+                <p className="text-xs text-ink-faint">
+                  {isUpdate ? "Existing entry loaded — add new skills below" : "Fill in all required fields and submit"}
+                </p>
               </div>
-              <button
-                type="button"
-                onClick={closeDialog}
-                className="rounded-lg p-1.5 text-ink-faint hover:bg-surface-2 hover:text-ink focus-visible:outline-none"
-              >
+              <button type="button" onClick={closeDialog} className="rounded-lg p-1.5 text-ink-faint hover:bg-surface-2 hover:text-ink focus-visible:outline-none">
                 <X size={18} />
               </button>
             </div>
@@ -297,20 +321,20 @@ export function SkillEntryForm({ onSuccess }: { onSuccess: () => void }) {
 
               {/* Name */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-ink-soft">
-                  Name <span className="text-rose-500">*</span>
-                </label>
+                <label className="text-xs font-semibold text-ink-soft">Name <span className="text-rose-500">*</span></label>
                 <NameAutocomplete
                   value={form.name}
-                  onChange={(v) => setForm((f) => ({ ...f, name: v }))}
+                  onChange={(v) => {
+                    setForm((f) => ({ ...f, name: v }));
+                    if (!v) setExisting(null);
+                  }}
+                  onSelect={handleNameSelect}
                 />
               </div>
 
               {/* Segment */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-ink-soft">
-                  Segment <span className="text-rose-500">*</span>
-                </label>
+                <label className="text-xs font-semibold text-ink-soft">Segment <span className="text-rose-500">*</span></label>
                 <select
                   value={form.segment}
                   onChange={(e) => setForm((f) => ({ ...f, segment: e.target.value }))}
@@ -322,9 +346,7 @@ export function SkillEntryForm({ onSuccess }: { onSuccess: () => void }) {
 
               {/* Level */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-ink-soft">
-                  Level <span className="text-rose-500">*</span>
-                </label>
+                <label className="text-xs font-semibold text-ink-soft">Level <span className="text-rose-500">*</span></label>
                 <select
                   value={form.level}
                   onChange={(e) => setForm((f) => ({ ...f, level: e.target.value }))}
@@ -340,18 +362,35 @@ export function SkillEntryForm({ onSuccess }: { onSuccess: () => void }) {
                   <p className="text-xs font-semibold text-ink-soft">
                     Functional Skills <span className="text-rose-500">*</span>
                   </p>
-                  <p className="text-[11px] text-ink-faint">Select up to 6 key skills (platforms, certifications, domain expertise)</p>
+                  <p className="text-[11px] text-ink-faint">Platforms, certifications, domain expertise</p>
                 </div>
+
+                {/* Existing skills — locked, always retained */}
+                {isUpdate && existing!.functionalSkills.length > 0 && (
+                  <div className="rounded-lg border border-border bg-surface-2/40 px-3 py-2.5">
+                    <p className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+                      <Lock size={10} /> Existing skills — retained automatically
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {existing!.functionalSkills.map((s) => (
+                        <span key={s} className="rounded-md bg-surface-2 px-2 py-0.5 text-[11px] text-ink-soft border border-border">{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* New skill slots */}
                 <datalist id="functional-list">
                   {FUNCTIONAL_SKILLS.map((s) => <option key={s} value={s} />)}
                 </datalist>
-                {form.functionalSkills.map((val, i) => (
+                <p className="text-[11px] text-ink-faint">{isUpdate ? "Add new skills below (leave blank if nothing to add):" : "Select up to 6 key skills:"}</p>
+                {form.newFunctionalSkills.map((val, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <span className="w-5 text-right text-[11px] text-ink-faint">{i + 1}.</span>
                     <input
                       type="text"
                       list="functional-list"
-                      placeholder={`Skill ${i + 1}`}
+                      placeholder={`New skill ${i + 1}`}
                       value={val}
                       onChange={(e) => setFunctional(i, e.target.value)}
                       className="h-9 flex-1 rounded-lg border border-border bg-surface-2/60 px-3 text-sm text-ink placeholder:text-ink-faint focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold"
@@ -364,18 +403,34 @@ export function SkillEntryForm({ onSuccess }: { onSuccess: () => void }) {
               <div className="flex flex-col gap-2">
                 <div>
                   <p className="text-xs font-semibold text-ink-soft">Business Skills</p>
-                  <p className="text-[11px] text-ink-faint">Select 3–4 key skills (soft skills, management capabilities)</p>
+                  <p className="text-[11px] text-ink-faint">Soft skills, management capabilities</p>
                 </div>
+
+                {/* Existing business skills — locked */}
+                {isUpdate && existing!.businessSkills.length > 0 && (
+                  <div className="rounded-lg border border-border bg-surface-2/40 px-3 py-2.5">
+                    <p className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+                      <Lock size={10} /> Existing skills — retained automatically
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {existing!.businessSkills.map((s) => (
+                        <span key={s} className="rounded-md bg-gold/10 px-2 py-0.5 text-[11px] text-gold-text border border-gold/20">{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <datalist id="business-list">
                   {BUSINESS_SKILLS.map((s) => <option key={s} value={s} />)}
                 </datalist>
-                {form.businessSkills.map((val, i) => (
+                <p className="text-[11px] text-ink-faint">{isUpdate ? "Add new skills below (leave blank if nothing to add):" : "Select 3–4 key skills:"}</p>
+                {form.newBusinessSkills.map((val, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <span className="w-5 text-right text-[11px] text-ink-faint">{i + 1}.</span>
                     <input
                       type="text"
                       list="business-list"
-                      placeholder={`Skill ${i + 1}`}
+                      placeholder={`New skill ${i + 1}`}
                       value={val}
                       onChange={(e) => setBusiness(i, e.target.value)}
                       className="h-9 flex-1 rounded-lg border border-border bg-surface-2/60 px-3 text-sm text-ink placeholder:text-ink-faint focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold"
@@ -405,11 +460,7 @@ export function SkillEntryForm({ onSuccess }: { onSuccess: () => void }) {
 
             {/* Footer */}
             <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-4">
-              <button
-                type="button"
-                onClick={closeDialog}
-                className="h-9 rounded-lg border border-border px-4 text-sm font-medium text-ink-soft hover:bg-surface-2 focus-visible:outline-none"
-              >
+              <button type="button" onClick={closeDialog} className="h-9 rounded-lg border border-border px-4 text-sm font-medium text-ink-soft hover:bg-surface-2 focus-visible:outline-none">
                 Cancel
               </button>
               <button
@@ -418,7 +469,7 @@ export function SkillEntryForm({ onSuccess }: { onSuccess: () => void }) {
                 className="inline-flex h-9 items-center gap-2 rounded-lg bg-ink px-4 text-sm font-semibold text-surface disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
               >
                 {pending && <Loader2 size={14} className="animate-spin" />}
-                Submit
+                {isUpdate ? "Add Skills" : "Submit"}
               </button>
             </div>
           </form>
