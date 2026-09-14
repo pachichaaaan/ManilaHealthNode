@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 
 const LEAD_EMAIL = "Patricia.e.mamaril@accenture.com";
-const FROM_EMAIL = "ManilaHealthNode <notifications@resend.dev>";
+const FROM_EMAIL = "ManilaHealthNode <notifications@manilahealthnode.fun>";
 
 let _resend: Resend | null = null;
 function getResend() {
